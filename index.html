@@ -69,6 +69,18 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .device p{color:var(--muted);font-size:13px}
 .device-icon{font-size:40px}
 .features{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+.saved-wrap{margin:24px auto;max-width:1000px;background:linear-gradient(145deg,#17243b,#10192a);border:1px solid var(--line);border-radius:19px;padding:20px}
+.saved-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.saved-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:14px}
+.saved-card{border:1px solid var(--line);background:#0c1423;border-radius:14px;padding:14px;min-width:0}
+.saved-card h4{margin:0 0 5px;font-size:15px;overflow-wrap:anywhere}
+.saved-meta{color:var(--muted);font-size:12px}
+.online-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#67e3a5;margin-right:6px}
+.offline-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#8290a8;margin-right:6px}
+.saved-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.saved-actions button{flex:1;padding:9px 10px;font-size:12px}
+.code-actions{display:flex;gap:8px;flex-wrap:wrap;width:100%}
+.code-actions button{flex:1}
 .feature{padding:15px;border:1px solid var(--line);border-radius:13px;text-align:center;color:var(--muted);font-size:12px}
 .feature b{display:block;color:white;margin-bottom:5px}
 .overlay{
@@ -109,6 +121,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:650px){
  .wrap{padding:14px}.devices,.authgrid{grid-template-columns:1fr}
  .features{grid-template-columns:1fr}
+ .saved-wrap{padding:15px}
  .hero h1{font-size:38px}
  .qr-area{align-items:flex-start}
  .qrbox{width:105px;height:105px}
@@ -145,6 +158,15 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </section>
 
 <section id="incoming" class="incoming hidden"></section>
+
+<section class="saved-wrap" id="savedWrap">
+ <div class="saved-head">
+  <div><h3 style="margin:0">MY SAVED DEVICES</h3><div class="status">Select a registered device and connect without typing its code again.</div></div>
+  <button class="secondary" id="refreshDevices">↻ REFRESH</button>
+ </div>
+ <div id="savedDevices" class="saved-list"><div class="status">Sign in to see your saved devices.</div></div>
+ <div id="savedMsg" class="status"></div>
+</section>
 
 <main>
  <h3 style="text-align:center;margin-bottom:16px">SELECT YOUR DEVICE</h3>
@@ -194,7 +216,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
    <h3>Register This Device</h3>
    <label class="label">DEVICE NAME</label>
    <input id="deviceName" maxlength="32" placeholder="My Windows PC">
-   <button class="full" id="createCode">REGISTER DEVICE & GENERATE QR</button>
+   <button class="full" id="createCode">SAVE / LOAD THIS DEVICE</button>
+    <button class="secondary full hidden" id="regenerateCode">↻ REGENERATE DEVICE CODE</button>
 
    <div id="qrResult" class="qr-area hidden">
     <div class="qrbox" id="qrcode"></div>
@@ -245,7 +268,14 @@ let currentDevice = 'pc';
 let currentCode = '';
 let scanner = null;
 let channel = null;
-let requestStatusChannel = null;
+let statusChannel = null;
+let heartbeatTimer = null;
+let registeredDevice = null;
+let savedDevicesCache = [];
+let currentOutgoingRequestId = null;
+let incomingPollTimer = null;
+let outgoingPollTimer = null;
+let deviceRefreshTimer = null;
 
 const overlay = $('overlay');
 
@@ -267,13 +297,94 @@ function requireLogin() {
  return true;
 }
 
+function localDeviceKey(type) {
+ return 'mobipc_device_' + session.user.id + '_' + type;
+}
+
+function normalizeCode(value) {
+ return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+
+function formatCode(value) {
+ const clean = normalizeCode(value);
+ return clean.length > 4 ? clean.slice(0,4) + '-' + clean.slice(4) : clean;
+}
+
+function showDeviceCode(device) {
+ registeredDevice = device;
+ currentCode = normalizeCode(device.device_code);
+ $('codeText').textContent = formatCode(currentCode);
+ $('qrcode').innerHTML = '';
+ if (window.QRCode) new QRCode($('qrcode'), {
+  text:'MOBIPC-PAIR:' + currentCode,
+  width:110, height:110, correctLevel:QRCode.CorrectLevel.M
+ });
+ $('qrResult').classList.remove('hidden');
+ $('regenerateCode').classList.remove('hidden');
+ $('createCode').textContent = 'DEVICE SAVED — CODE LOADED';
+}
+
+async function loadSavedDevices() {
+ if (!sb || !session?.user) {
+  $('savedDevices').innerHTML = '<div class="status">Sign in to see your saved devices.</div>';
+  return;
+ }
+ $('savedDevices').innerHTML = '<div class="status">Loading devices...</div>';
+ const {data,error} = await sb.from('devices')
+  .select('id,device_name,device_type,device_code,last_seen_at,created_at')
+  .eq('user_id',session.user.id)
+  .order('created_at',{ascending:false});
+ if (error) {
+  $('savedDevices').textContent = 'Could not load devices: ' + error.message;
+  return;
+ }
+ savedDevicesCache = data || [];
+ if (!savedDevicesCache.length) {
+  $('savedDevices').innerHTML = '<div class="status">No saved devices yet. Register your PC and Android once.</div>';
+  return;
+ }
+ $('savedDevices').innerHTML = savedDevicesCache.map(d => {
+  const online = d.last_seen_at && (Date.now() - new Date(d.last_seen_at).getTime() < 90000);
+  const icon = d.device_type === 'pc' ? '💻' : '📱';
+  return `<article class="saved-card"><h4>${icon} ${escapeHTML(d.device_name)}</h4><div class="saved-meta">${d.device_type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div><div class="saved-meta">Code: ${escapeHTML(formatCode(d.device_code))}</div><div class="saved-actions"><button data-connect-device="${d.id}" ${online ? "" : "disabled"}>${online ? "CONNECT" : "OFFLINE"}</button></div></article>`;
+ }).join('');
+ $('savedDevices').querySelectorAll('[data-connect-device]').forEach(btn => {
+  btn.addEventListener('click', async () => {
+   const device = savedDevicesCache.find(x => x.id === btn.dataset.connectDevice);
+   if (!device) return;
+   btn.disabled = true;
+   btn.textContent = 'SENDING...';
+   await requestConnection(device.device_code, 'savedMsg');
+   btn.disabled = false;
+   btn.textContent = 'CONNECT';
+  });
+ });
+}
+
+async function startHeartbeat() {
+ if (!session?.user || !sb) return;
+ if (heartbeatTimer) clearInterval(heartbeatTimer);
+ const ids = ['pc','android'].map(t => localStorage.getItem(localDeviceKey(t))).filter(Boolean);
+ if (!ids.length) return;
+ const beat = async () => {
+  if (!session?.user) return;
+  for (const id of ids) {
+   await sb.from('devices').update({last_seen_at:new Date().toISOString()})
+    .eq('id',id).eq('user_id',session.user.id);
+  }
+  await loadSavedDevices();
+ };
+ await beat();
+ heartbeatTimer = setInterval(beat,30000);
+}
+
 function generateCode() {
  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
  const bytes = new Uint8Array(8);
  crypto.getRandomValues(bytes);
  let s = '';
  for (let i=0;i<8;i++) s += chars[bytes[i] % chars.length];
- return s.slice(0,4) + '-' + s.slice(4);
+ return s; // Database stores the normalized 8-character code without a hyphen.
 }
 
 function openDevice(type) {
@@ -284,8 +395,23 @@ function openDevice(type) {
   : 'Register this Android phone or connect to your PC.';
  $('deviceName').value = type === 'pc' ? 'MY WINDOWS PC' : 'MY ANDROID PHONE';
  $('qrResult').classList.add('hidden');
+ $('regenerateCode').classList.add('hidden');
+ $('createCode').textContent = 'SAVE / LOAD THIS DEVICE';
+ registeredDevice = null;
  overlay.classList.add('open');
+ if (session?.user) loadLocalRegisteredDevice(type);
  switchTab('register');
+}
+
+async function loadLocalRegisteredDevice(type) {
+ const id = localStorage.getItem(localDeviceKey(type));
+ if (!id || !sb || !session?.user) return;
+ const {data,error} = await sb.from('devices').select('id,device_code,device_name,device_type')
+  .eq('id',id).eq('user_id',session.user.id).maybeSingle();
+ if (!error && data) {
+  $('deviceName').value = data.device_name;
+  showDeviceCode(data);
+ }
 }
 
 function closeDialog() {
@@ -345,15 +471,27 @@ async function initSupabase() {
  sb.auth.onAuthStateChange((_event,newSession) => {
   session = newSession;
   updateAuthUI();
-  if (session) subscribeIncoming();
-  else {
+  if (session) {
+   subscribeIncoming(); loadSavedDevices(); startHeartbeat(); subscribeRequestStatus();
+   if (deviceRefreshTimer) clearInterval(deviceRefreshTimer);
+   deviceRefreshTimer = setInterval(loadSavedDevices,15000);
+  } else {
+   if (heartbeatTimer) clearInterval(heartbeatTimer);
+   heartbeatTimer = null;
    if (channel) sb.removeChannel(channel);
    channel = null;
+   if (incomingPollTimer) clearInterval(incomingPollTimer); incomingPollTimer = null;
+   if (outgoingPollTimer) clearInterval(outgoingPollTimer); outgoingPollTimer = null;
+   if (deviceRefreshTimer) clearInterval(deviceRefreshTimer); deviceRefreshTimer = null;
    $('incoming').classList.add('hidden');
   }
  });
 
- if (session) subscribeIncoming();
+ if (session) {
+  subscribeIncoming(); loadSavedDevices(); startHeartbeat(); subscribeRequestStatus();
+  if (deviceRefreshTimer) clearInterval(deviceRefreshTimer);
+  deviceRefreshTimer = setInterval(loadSavedDevices,15000);
+ }
 }
 
 $('signup').onclick = async () => {
@@ -372,6 +510,7 @@ $('signup').onclick = async () => {
   session = result.data.session;
   updateAuthUI();
   subscribeIncoming();
+  loadSavedDevices(); startHeartbeat(); subscribeRequestStatus();
  } else {
   setStatus('Account created. Check your email for verification, then sign in.');
  }
@@ -389,53 +528,93 @@ $('signin').onclick = async () => {
  session = result.data.session;
  updateAuthUI();
  subscribeIncoming();
+ loadSavedDevices(); startHeartbeat(); subscribeRequestStatus();
 };
 
 $('signout').onclick = async () => {
  const result = await sb.auth.signOut();
  if (result.error) return setStatus(result.error.message);
  session = null;
+ if (heartbeatTimer) clearInterval(heartbeatTimer); heartbeatTimer = null;
  updateAuthUI();
  if (channel) await sb.removeChannel(channel);
  channel = null;
+ if (incomingPollTimer) clearInterval(incomingPollTimer); incomingPollTimer = null;
+ if (outgoingPollTimer) clearInterval(outgoingPollTimer); outgoingPollTimer = null;
+ if (deviceRefreshTimer) clearInterval(deviceRefreshTimer); deviceRefreshTimer = null;
  $('incoming').classList.add('hidden');
+ $('savedDevices').innerHTML = '<div class="status">Sign in to see your saved devices.</div>';
 };
 
-/* REGISTER DEVICE */
-$('createCode').onclick = async () => {
+/* REGISTER OR LOAD THE SAME DEVICE */
+async function saveOrLoadDevice() {
  if (!requireLogin()) return;
-
  const name = $('deviceName').value.trim();
  if (!name) return showMessage('registerMsg','Enter a device name.');
-
- currentCode = generateCode();
-
- const result = await sb.from('devices').insert({
-  user_id:session.user.id,
-  device_name:name,
-  device_type:currentDevice,
-  device_code:currentCode
- }).select('id,device_code').single();
-
- if (result.error)
-  return showMessage('registerMsg','Registration error: '+result.error.message);
-
- $('codeText').textContent = result.data.device_code;
- $('qrcode').innerHTML = '';
-
- if (window.QRCode) {
-  new QRCode($('qrcode'),{
-   text:'MOBIPC-PAIR:'+result.data.device_code,
-   width:110,
-   height:110,
-   correctLevel:QRCode.CorrectLevel.M
-  });
+ const storageKey = localDeviceKey(currentDevice);
+ const savedId = localStorage.getItem(storageKey);
+ if (savedId) {
+  const existing = await sb.from('devices')
+   .select('id,device_code,device_name,device_type')
+   .eq('id',savedId).eq('user_id',session.user.id).maybeSingle();
+  if (existing.data) {
+   const updated = await sb.from('devices').update({device_name:name,last_seen_at:new Date().toISOString()})
+    .eq('id',savedId).eq('user_id',session.user.id)
+    .select('id,device_code,device_name,device_type').single();
+   if (updated.error) return showMessage('registerMsg','Could not update device: '+updated.error.message);
+   showDeviceCode(updated.data);
+   showMessage('registerMsg','Existing device loaded. Your code has been kept the same.');
+   loadSavedDevices(); startHeartbeat(); subscribeIncoming();
+   return;
+  }
+  localStorage.removeItem(storageKey);
  }
+ // Recover a previously registered device for this account/type/name if browser storage was cleared.
+ const recovered = await sb.from('devices')
+  .select('id,device_code,device_name,device_type')
+  .eq('user_id',session.user.id)
+  .eq('device_type',currentDevice)
+  .eq('device_name',name)
+  .order('created_at',{ascending:false})
+  .limit(1)
+  .maybeSingle();
+ if (!recovered.error && recovered.data) {
+  localStorage.setItem(storageKey,recovered.data.id);
+  const touched = await sb.from('devices')
+   .update({last_seen_at:new Date().toISOString()})
+   .eq('id',recovered.data.id).eq('user_id',session.user.id);
+  showDeviceCode(recovered.data);
+  showMessage('registerMsg','Your existing registered device was found. The saved code has been restored.');
+  loadSavedDevices(); startHeartbeat(); subscribeIncoming();
+  return;
+ }
+ const code = generateCode();
+ const result = await sb.from('devices').insert({
+  user_id:session.user.id, device_name:name, device_type:currentDevice,
+  device_code:code, last_seen_at:new Date().toISOString()
+ }).select('id,device_code,device_name,device_type').single();
+ if (result.error) return showMessage('registerMsg','Registration error: '+result.error.message);
+ localStorage.setItem(storageKey,result.data.id);
+ showDeviceCode(result.data);
+ showMessage('registerMsg','Device registered. This code will stay the same on this browser until you regenerate it.');
+ loadSavedDevices(); startHeartbeat(); subscribeIncoming();
+}
 
- $('qrResult').classList.remove('hidden');
- showMessage('registerMsg','Device successfully registered in Supabase. Keep the code private.');
- subscribeIncoming();
-};
+async function regenerateDeviceCode() {
+ if (!requireLogin() || !registeredDevice) return;
+ if (!confirm('Generate a new code? The old code will stop working.')) return;
+ const newCode = generateCode();
+ const result = await sb.from('devices').update({device_code:newCode,last_seen_at:new Date().toISOString()})
+  .eq('id',registeredDevice.id).eq('user_id',session.user.id)
+  .select('id,device_code,device_name,device_type').single();
+ if (result.error) return showMessage('registerMsg','Could not regenerate code: '+result.error.message);
+ showDeviceCode(result.data);
+ showMessage('registerMsg','New device code generated. The previous code is no longer valid.');
+ loadSavedDevices();
+}
+
+$('createCode').onclick = saveOrLoadDevice;
+$('regenerateCode').onclick = regenerateDeviceCode;
 
 $('copyCode').onclick = async () => {
  try {
@@ -447,223 +626,178 @@ $('copyCode').onclick = async () => {
 };
 
 /* REQUEST CONNECTION */
-function formatDeviceCode(rawCode) {
- const clean = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
- return clean.length > 4 ? clean.slice(0,4)+'-'+clean.slice(4) : clean;
-}
-
-async function requestConnection(rawCode) {
+async function requestConnection(rawCode, messageTarget = 'connectMsg') {
  if (!session?.user) {
-  showMessage('connectMsg','Please sign in first.');
+  showMessage(messageTarget,'Please sign in first.');
   return;
  }
-
- const clean = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
+ const clean = normalizeCode(rawCode);
  if (clean.length !== 8) {
-  showMessage('connectMsg','Enter a valid 8-character device code.');
+  showMessage(messageTarget,'Invalid code. Enter all 8 characters, for example ABCD-2345.');
   return;
  }
-
- $('sendRequest').disabled = true;
- showMessage('connectMsg','Checking device code and sending request...');
-
- try {
-  const result = await sb.rpc('request_device_connection',{
-   p_device_code:clean
-  });
-
-  if (result.error) {
-   showMessage('connectMsg','Request error: '+result.error.message);
-   return;
-  }
-
-  const requestId = result.data;
-  if (!requestId) {
-   showMessage('connectMsg','The server did not return a request ID. Please try again.');
-   return;
-  }
-
-  showMessage('connectMsg','Request sent successfully. Waiting for approval on the other device...');
-  watchRequestStatus(requestId);
- } catch (error) {
-  showMessage('connectMsg','Connection request failed: '+(error?.message || String(error)));
- } finally {
-  $('sendRequest').disabled = false;
+ if (!sb) {
+  showMessage(messageTarget,'Database is not connected. Refresh the page and sign in again.');
+  return;
  }
+ showMessage(messageTarget,'Checking device code and sending request...');
+ const {data,error} = await sb.rpc('request_device_connection',{p_device_code:clean});
+ if (error) {
+  const msg = error.message || 'Unknown error';
+  if (/device code not found/i.test(msg)) {
+   showMessage(messageTarget,'Device code not found. Check that you copied the latest code from the registered device, then run the SQL fix below in Supabase.');
+  } else if (/invalid device code/i.test(msg)) {
+   showMessage(messageTarget,'Code format is incorrect. Enter the complete 8-character code.');
+  } else if (/signed in/i.test(msg)) {
+   showMessage(messageTarget,'Your session expired. Please sign in again.');
+  } else {
+   showMessage(messageTarget,'Request error: '+msg);
+  }
+  return;
+ }
+ currentOutgoingRequestId = data;
+ showMessage(messageTarget,'Request sent successfully. Waiting for the other device to approve...');
+ if (outgoingPollTimer) clearInterval(outgoingPollTimer);
+ await refreshOutgoingStatus();
+ outgoingPollTimer = setInterval(refreshOutgoingStatus,5000);
 }
-
 $('sendRequest').onclick = () => requestConnection($('manualCode').value);
+$('refreshDevices').onclick = loadSavedDevices;
 
 $('manualCode').oninput = e => {
- e.target.value = formatDeviceCode(e.target.value);
+ let value = normalizeCode(e.target.value);
+ e.target.value = value.length > 4
+  ? value.slice(0,4)+'-'+value.slice(4)
+  : value;
 };
-
-/* Listen for approval/rejection on the device that sent the request. */
-async function watchRequestStatus(requestId) {
- if (requestStatusChannel) {
-  await sb.removeChannel(requestStatusChannel);
-  requestStatusChannel = null;
- }
-
- const updateStatus = status => {
-  if (status === 'approved') {
-   showMessage('connectMsg','✓ Request approved! Device pairing is approved. Remote screen control is a separate feature.');
-  } else if (status === 'rejected') {
-   showMessage('connectMsg','The device owner rejected this connection request.');
-  } else if (status === 'expired') {
-   showMessage('connectMsg','This connection request has expired. Send a new request.');
-  } else if (status === 'pending') {
-   showMessage('connectMsg','Request sent successfully. Waiting for device owner approval...');
-  }
- };
-
- requestStatusChannel = sb.channel('mobipc-request-'+requestId)
-  .on('postgres_changes',{
-   event:'UPDATE',
-   schema:'public',
-   table:'connection_requests',
-   filter:'id=eq.'+requestId
-  },payload => updateStatus(payload.new.status))
-  .subscribe(async status => {
-   if (status === 'SUBSCRIBED') {
-    const latest = await sb.from('connection_requests')
-     .select('status')
-     .eq('id',requestId)
-     .maybeSingle();
-    if (latest.data) updateStatus(latest.data.status);
-    if (latest.error) showMessage('connectMsg','Request sent. Could not refresh status: '+latest.error.message);
-   }
-  });
-}
 
 /* QR SCANNER */
 $('scanButton').onclick = async () => {
  if (!session?.user) return showMessage('connectMsg','Please sign in first.');
 
  if (!window.Html5Qrcode)
-  return showMessage('connectMsg','QR scanner library did not load. Check your internet connection and refresh.');
+  return showMessage('connectMsg','QR scanner library could not load.');
 
- if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
-  return showMessage('connectMsg','Camera access requires HTTPS (or localhost). Open this page using its HTTPS website link, not a normal HTTP link.');
+ if (!navigator.mediaDevices?.getUserMedia)
+  return showMessage('connectMsg','Camera needs HTTPS or localhost and permission.');
 
  $('scanner').classList.add('show');
  $('scanButton').disabled = true;
- showMessage('connectMsg','Starting camera. If Chrome asks, choose Allow.');
 
  try {
   scanner = new Html5Qrcode('reader');
   await scanner.start(
    {facingMode:'environment'},
-   {fps:10,qrbox:{width:220,height:220},aspectRatio:1.0},
-   async decoded => {
-    const value = decoded.trim();
-    let code = value;
-    const prefix = 'MOBIPC-PAIR:';
-    if (value.toUpperCase().startsWith(prefix))
-     code = value.substring(prefix.length);
-    else if (/^https?:\/\//i.test(value)) {
-     try {
-      const url = new URL(value);
-      code = url.searchParams.get('code') || url.hash.replace(/^#/, '') || value;
-     } catch(e) {}
-    }
+   {fps:10,qrbox:{width:210,height:210}},
+   decoded => {
+    let value = decoded.trim();
+    if (value.toUpperCase().startsWith('MOBIPC-PAIR:'))
+     value = value.substring('MOBIPC-PAIR:'.length).trim();
+    value = formatCode(value);
 
-    const clean = code.toUpperCase().replace(/[^A-Z0-9]/g,'');
-    if (clean.length !== 8) {
-     showMessage('connectMsg','QR detected, but it does not contain a valid MobiPC 8-character pairing code.');
-     return;
-    }
-
-    $('manualCode').value = formatDeviceCode(clean);
-    await stopScanner();
-    await requestConnection(clean);
+    $('manualCode').value = value;
+    stopScanner();
+    requestConnection(value);
    },
    () => {}
   );
-  showMessage('connectMsg','Camera is running. Point it at the MobiPC Connect QR code.');
  } catch(error) {
-  const detail = error?.message || String(error);
-  showMessage('connectMsg','Camera could not start: '+detail+'. Check Chrome camera permission and open the site over HTTPS.');
-  await stopScanner();
+  showMessage('connectMsg','Camera could not start. Allow camera permission and use HTTPS.');
+  stopScanner();
  }
 };
 
 async function stopScanner() {
- const activeScanner = scanner;
- scanner = null;
- if (activeScanner) {
+ if (scanner) {
   try {
-   if (activeScanner.isScanning) await activeScanner.stop();
-   await activeScanner.clear();
-  } catch(error) {
-   console.warn('Scanner stop:',error);
-  }
+   if (scanner.isScanning) await scanner.stop();
+   await scanner.clear();
+  } catch(e) {}
+  scanner = null;
  }
  $('scanner').classList.remove('show');
  $('scanButton').disabled = false;
 }
 $('stopScan').onclick = stopScanner;
 
-/* REALTIME INCOMING REQUESTS */
-async function showIncomingRequest(req) {
- if (!session?.user || !req || req.status !== 'pending') return;
-
- const device = await sb.from('devices')
-  .select('device_name')
-  .eq('id',req.target_device_id)
-  .eq('user_id',session.user.id)
-  .maybeSingle();
-
- if (device.error || !device.data) return;
-
+/* INCOMING REQUESTS: polling is used as a reliable fallback to Realtime */
+async function refreshIncomingRequests() {
+ if (!sb || !session?.user) return;
+ const {data: requests,error} = await sb.from('connection_requests')
+  .select('id,target_device_id,requester_id,status,created_at')
+  .eq('status','pending')
+  .order('created_at',{ascending:false})
+  .limit(20);
+ if (error) {
+  $('incoming').classList.add('hidden');
+  return;
+ }
+ const owned = [];
+ for (const req of (requests || [])) {
+  const {data: device} = await sb.from('devices')
+   .select('device_name,device_type')
+   .eq('id',req.target_device_id)
+   .eq('user_id',session.user.id)
+   .maybeSingle();
+  if (device) owned.push({req,device});
+ }
  const box = $('incoming');
+ if (!owned.length) {
+  box.classList.add('hidden');
+  box.innerHTML = '';
+  return;
+ }
  box.classList.remove('hidden');
- box.innerHTML =
-  '<b>Incoming connection request</b>'+
-  '<p>Request for '+escapeHTML(device.data.device_name)+
-  '. Approve only if you recognize the requester.</p>'+
-  '<button id="approveRequest">APPROVE</button>'+
-  '<button id="rejectRequest" class="danger">REJECT</button>';
-
- $('approveRequest').onclick = () => respondRequest(req.id,'approve');
- $('rejectRequest').onclick = () => respondRequest(req.id,'reject');
+ box.innerHTML = '<b>Incoming connection requests</b>' + owned.map(({req,device}) =>
+  '<div class="saved-card" style="margin-top:10px">' +
+  '<b>Request for ' + escapeHTML(device.device_name) + '</b>' +
+  '<div class="saved-meta">From another signed-in account/device · ' + new Date(req.created_at).toLocaleString() + '</div>' +
+  '<button data-approve="' + req.id + '">APPROVE</button>' +
+  '<button class="danger" data-reject="' + req.id + '">REJECT</button>' +
+  '</div>'
+ ).join('');
+ box.querySelectorAll('[data-approve]').forEach(btn => btn.onclick = () => respondRequest(btn.dataset.approve,'approve'));
+ box.querySelectorAll('[data-reject]').forEach(btn => btn.onclick = () => respondRequest(btn.dataset.reject,'reject'));
 }
 
 async function subscribeIncoming() {
  if (!sb || !session?.user) return;
-
- if (channel) await sb.removeChannel(channel);
-
- /* Load requests that arrived before the realtime listener connected. */
- const pending = await sb.from('connection_requests')
-  .select('id,target_device_id,status,created_at')
-  .eq('status','pending')
-  .order('created_at',{ascending:false})
-  .limit(10);
-
- if (!pending.error && pending.data?.length) {
-  for (const req of pending.data) {
-   await showIncomingRequest(req);
-   if (!$('incoming').classList.contains('hidden')) break;
-  }
- }
-
- const userId = session.user.id;
- channel = sb.channel('mobipc-user-'+userId)
-  .on('postgres_changes',{
-   event:'INSERT',
-   schema:'public',
-   table:'connection_requests'
-  },async payload => {
-   await showIncomingRequest(payload.new);
-  })
-  .subscribe(status => {
-   if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-    console.warn('Incoming request realtime status:',status);
-   }
-  });
+ await refreshIncomingRequests();
+ if (incomingPollTimer) clearInterval(incomingPollTimer);
+ incomingPollTimer = setInterval(refreshIncomingRequests,5000);
 }
 
+async function refreshOutgoingStatus() {
+ if (!sb || !session?.user || !currentOutgoingRequestId) return;
+ const {data,error} = await sb.from('connection_requests')
+  .select('status')
+  .eq('id',currentOutgoingRequestId)
+  .maybeSingle();
+ if (error || !data) return;
+ const status = String(data.status || 'pending').toLowerCase();
+ const message = status === 'approved'
+  ? 'APPROVED: Device owner approved the pairing request. Remote screen control is not active yet.'
+  : status === 'rejected'
+   ? 'REJECTED: The device owner rejected the connection request.'
+   : status === 'expired'
+    ? 'EXPIRED: This connection request expired. Send a new request.'
+    : 'PENDING: Request sent. Waiting for device owner approval...';
+ $('savedMsg').textContent = message;
+ $('connectMsg').textContent = message;
+ $('connectMsg').classList.add('show');
+ if (status !== 'pending' && outgoingPollTimer) {
+  clearInterval(outgoingPollTimer);
+  outgoingPollTimer = null;
+ }
+}
+
+function subscribeRequestStatus() {
+ if (outgoingPollTimer) clearInterval(outgoingPollTimer);
+ if (currentOutgoingRequestId) {
+  refreshOutgoingStatus();
+  outgoingPollTimer = setInterval(refreshOutgoingStatus,5000);
+ }
+}
 function escapeHTML(value) {
  return String(value).replace(/[&<>"']/g,c=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -671,31 +805,24 @@ function escapeHTML(value) {
 }
 
 async function respondRequest(id,decision) {
- const approveButton = $('approveRequest');
- const rejectButton = $('rejectRequest');
- if (approveButton) approveButton.disabled = true;
- if (rejectButton) rejectButton.disabled = true;
+ const result = await sb.rpc('respond_device_connection',{
+  p_request_id:id,
+  p_decision:decision
+ });
 
- try {
-  const result = await sb.rpc('respond_device_connection',{
-   p_request_id:id,
-   p_decision:decision
-  });
-
-  if (result.error) {
-   $('incoming').textContent = 'Could not update request: '+result.error.message;
-   return;
-  }
-
-  $('incoming').textContent = decision === 'approve'
-   ? '✓ Request approved. Pairing is approved, but remote screen control is not implemented yet.'
-   : 'Connection request rejected.';
- } catch(error) {
-  $('incoming').textContent = 'Could not update request: '+(error?.message || String(error));
+ if (result.error) {
+  $('incoming').textContent = 'Could not update request: '+result.error.message;
+  return;
  }
+
+ $('incoming').textContent = decision === 'approve'
+  ? 'Request approved. Pairing is approved, but remote control is not implemented yet.'
+  : 'Connection request rejected.';
+ await refreshIncomingRequests();
+ loadSavedDevices();
 }
 
-initSupabase();
+initSupabase().catch(error => setStatus('Startup error: ' + (error?.message || error)));
 })();
 </script>
 </body>
