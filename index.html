@@ -708,7 +708,7 @@ async function requestConnection(rawCode, messageTarget = 'connectMsg') {
   localStorage.setItem(localDeviceKey(currentDevice), requesterDeviceId);
  }
  showMessage(messageTarget,'Checking device code and sending request...');
- const {data,error} = await sb.rpc('request_device_connection',{p_device_code:clean,p_requester_device_id:requesterDeviceId});
+ const {data,error} = await sb.rpc('request_device_connection',{p_device_code:clean});
  if (error) {
   const msg = error.message || 'Unknown error';
   if (/device code not found/i.test(msg)) {
