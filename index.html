@@ -171,6 +171,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
   <button class="secondary" id="refreshDevices">↻ REFRESH</button>
  </div>
  <div id="savedDevices" class="saved-list"><div class="status">Sign in to see your saved devices.</div></div>
+ <div class="saved-head" style="margin-top:22px">
+  <div><h3 style="margin:0">DEVICES PAIRED WITH YOU</h3><div class="status">Devices that have previously approved a connection with your device.</div></div>
+  <button class="secondary" id="refreshPairedDevices">↻ REFRESH PAIRED</button>
+ </div>
+ <div id="pairedDevices" class="saved-list"><div class="status">Sign in to see paired devices.</div></div>
  <div id="savedMsg" class="status"></div>
 </section>
 
@@ -337,38 +342,54 @@ function showDeviceCode(device) {
 async function loadSavedDevices() {
  if (!sb || !session?.user) {
   $('savedDevices').innerHTML = '<div class="status">Sign in to see your saved devices.</div>';
+ $('pairedDevices').innerHTML = '<div class="status">Sign in to see paired devices.</div>';
+  $('pairedDevices').innerHTML = '<div class="status">Sign in to see paired devices.</div>';
   return;
  }
- $('savedDevices').innerHTML = '<div class="status">Loading devices...</div>';
+ $('savedDevices').innerHTML = '<div class="status">Loading your devices...</div>';
  const {data,error} = await sb.from('devices')
   .select('id,device_name,device_type,device_code,last_seen_at,created_at')
   .eq('user_id',session.user.id)
   .order('created_at',{ascending:false});
  if (error) {
-  $('savedDevices').textContent = 'Could not load devices: ' + error.message;
+  $('savedDevices').textContent = 'Could not load your devices: ' + error.message;
+  await loadPairedDevices();
   return;
  }
  savedDevicesCache = data || [];
  if (!savedDevicesCache.length) {
-  $('savedDevices').innerHTML = '<div class="status">No saved devices yet. Register your PC and Android once.</div>';
+  $('savedDevices').innerHTML = '<div class="status">No devices registered by this account yet.</div>';
+ } else {
+  $('savedDevices').innerHTML = savedDevicesCache.map(d => {
+   const online = d.last_seen_at && (Date.now() - new Date(d.last_seen_at).getTime() < 90000);
+   const icon = d.device_type === 'pc' ? '💻' : '📱';
+   return `<article class="saved-card"><h4>${icon} ${escapeHTML(d.device_name)}</h4><div class="saved-meta">Your ${d.device_type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div><div class="saved-meta">Code: ${escapeHTML(formatCode(d.device_code))}</div></article>`;
+  }).join('');
+ }
+ await loadPairedDevices();
+}
+
+async function loadPairedDevices() {
+ if (!sb || !session?.user) return;
+ const host = $('pairedDevices');
+ if (!host) return;
+ host.innerHTML = '<div class="status">Loading paired devices...</div>';
+ const {data,error} = await sb.rpc('get_paired_devices');
+ if (error) {
+  host.innerHTML = '<div class="request-empty">Could not load paired devices: ' + escapeHTML(error.message) + '<br>Run the paired-devices SQL supplied with this update in Supabase.</div>';
   return;
  }
- $('savedDevices').innerHTML = savedDevicesCache.map(d => {
-  const online = d.last_seen_at && (Date.now() - new Date(d.last_seen_at).getTime() < 90000);
-  const icon = d.device_type === 'pc' ? '💻' : '📱';
-  return `<article class="saved-card"><h4>${icon} ${escapeHTML(d.device_name)}</h4><div class="saved-meta">${d.device_type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div><div class="saved-meta">Code: ${escapeHTML(formatCode(d.device_code))}</div><div class="saved-actions"><button data-connect-device="${d.id}" ${online ? "" : "disabled"}>${online ? "CONNECT" : "OFFLINE"}</button></div></article>`;
+ const devices = data || [];
+ if (!devices.length) {
+  host.innerHTML = '<div class="request-empty">No previously approved devices found yet. After a device request is accepted, it will appear here.</div>';
+  return;
+ }
+ host.innerHTML = devices.map(d => {
+  const online = d.peer_last_seen_at && (Date.now() - new Date(d.peer_last_seen_at).getTime() < 90000);
+  const icon = d.peer_device_type === 'pc' ? '💻' : '📱';
+  const pairedDate = d.paired_at ? new Date(d.paired_at).toLocaleDateString() : 'Previously approved';
+  return `<article class="saved-card"><h4>${icon} ${escapeHTML(d.peer_device_name || 'Paired device')}</h4><div class="saved-meta">${d.peer_device_type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div><div class="saved-meta">✓ Paired with you · ${escapeHTML(pairedDate)}</div><div class="saved-actions"><button class="secondary" disabled>PAIRED DEVICE</button></div></article>`;
  }).join('');
- $('savedDevices').querySelectorAll('[data-connect-device]').forEach(btn => {
-  btn.addEventListener('click', async () => {
-   const device = savedDevicesCache.find(x => x.id === btn.dataset.connectDevice);
-   if (!device) return;
-   btn.disabled = true;
-   btn.textContent = 'SENDING...';
-   await requestConnection(device.device_code, 'savedMsg');
-   btn.disabled = false;
-   btn.textContent = 'CONNECT';
-  });
- });
 }
 
 async function startHeartbeat() {
@@ -654,8 +675,20 @@ async function requestConnection(rawCode, messageTarget = 'connectMsg') {
   showMessage(messageTarget,'Database is not connected. Refresh the page and sign in again.');
   return;
  }
+ let requesterDeviceId = localStorage.getItem(localDeviceKey(currentDevice));
+ if (!requesterDeviceId) {
+  const own = await sb.from('devices').select('id,device_type,last_seen_at,created_at')
+   .eq('user_id',session.user.id).eq('device_type',currentDevice)
+   .order('last_seen_at',{ascending:false,nullsFirst:false}).limit(1).maybeSingle();
+  if (own.error || !own.data) {
+   showMessage(messageTarget,'First register this device (' + currentDevice.toUpperCase() + ') once, then send the connection request.');
+   return;
+  }
+  requesterDeviceId = own.data.id;
+  localStorage.setItem(localDeviceKey(currentDevice), requesterDeviceId);
+ }
  showMessage(messageTarget,'Checking device code and sending request...');
- const {data,error} = await sb.rpc('request_device_connection',{p_device_code:clean});
+ const {data,error} = await sb.rpc('request_device_connection',{p_device_code:clean,p_requester_device_id:requesterDeviceId});
  if (error) {
   const msg = error.message || 'Unknown error';
   if (/device code not found/i.test(msg)) {
@@ -677,6 +710,7 @@ async function requestConnection(rawCode, messageTarget = 'connectMsg') {
 }
 $('sendRequest').onclick = () => requestConnection($('manualCode').value);
 $('refreshDevices').onclick = loadSavedDevices;
+$('refreshPairedDevices').onclick = loadPairedDevices;
 
 $('manualCode').oninput = e => {
  let value = normalizeCode(e.target.value);
