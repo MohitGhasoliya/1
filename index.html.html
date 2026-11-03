@@ -1,0 +1,702 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080d1a">
+<title>MobiPC Connect</title>
+
+<style>
+:root {
+ --bg:#080d1a;
+ --surface:#111a2b;
+ --surface2:#17233a;
+ --line:#26334c;
+ --text:#f3f6ff;
+ --muted:#9aa9c4;
+ --cyan:#61e5dc;
+ --blue:#8ca5ff;
+ --green:#67e3a5;
+ --danger:#ff8b9b;
+}
+*{box-sizing:border-box}
+body{
+ margin:0;min-height:100vh;
+ background:radial-gradient(ellipse at 8% -10%,#19365a 0,transparent 40%),
+ radial-gradient(ellipse at 100% 70%,#1a2146 0,transparent 38%),var(--bg);
+ color:var(--text);
+ font:15px/1.5 system-ui,Arial,sans-serif
+}
+button,input{font:inherit}
+button{cursor:pointer}
+.wrap{max-width:1100px;margin:auto;padding:22px}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:35px}
+.brand{font-size:22px;font-weight:900}
+.brand span{color:var(--cyan)}
+.secure{font-size:12px;color:var(--green)}
+.hero{text-align:center;margin:35px auto;max-width:700px}
+.hero h1{font-size:clamp(35px,6vw,58px);line-height:1.08;margin:12px 0}
+.hero h1 span{color:var(--cyan)}
+.hero p{color:var(--muted)}
+.auth,.device,.panel,.incoming{
+ background:linear-gradient(145deg,#17243b,#10192a);
+ border:1px solid var(--line);border-radius:19px;padding:20px
+}
+.auth{max-width:900px;margin:25px auto}
+.auth h3{margin-top:0}
+.authgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input{
+ width:100%;padding:13px;border-radius:10px;
+ border:1px solid #ffffff24;background:#080f1c;
+ color:white;outline:none
+}
+input:focus{border-color:var(--cyan)}
+button{
+ border:0;border-radius:10px;padding:12px 16px;
+ background:linear-gradient(100deg,var(--cyan),#a8f1df);
+ color:#071421;font-weight:850
+}
+button.secondary{background:#ffffff0b;color:white;border:1px solid var(--line)}
+button.danger{background:#ff8b9b;color:#24050a}
+button:disabled{opacity:.5;cursor:not-allowed}
+.authbuttons{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
+.status{font-size:12px;color:var(--muted);margin-top:12px;overflow-wrap:anywhere}
+.devices{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.device{cursor:pointer;transition:.2s}
+.device:hover{border-color:var(--cyan);transform:translateY(-3px)}
+.device h2{margin:5px 0}
+.device p{color:var(--muted);font-size:13px}
+.device-icon{font-size:40px}
+.features{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px}
+.feature{padding:15px;border:1px solid var(--line);border-radius:13px;text-align:center;color:var(--muted);font-size:12px}
+.feature b{display:block;color:white;margin-bottom:5px}
+.overlay{
+ display:none;position:fixed;inset:0;z-index:10;
+ background:#050914ed;backdrop-filter:blur(10px);
+ padding:15px;align-items:center;justify-content:center
+}
+.overlay.open{display:flex}
+.dialog{
+ width:min(100%,560px);max-height:92vh;overflow:auto;
+ background:var(--surface);border:1px solid var(--line);
+ border-radius:22px;padding:22px
+}
+.dialoghead{display:flex;justify-content:space-between;align-items:center}
+.dialoghead h2{margin:0}
+.close{background:#ffffff10;color:white;padding:7px 13px}
+.tabs{display:flex;gap:8px;margin:18px 0}
+.tabs button{flex:1}
+.tabs button.active{background:var(--blue)}
+.panel{background:#0c1423;padding:17px}
+.panel h3{margin-top:0}
+.label{display:block;color:#c3cfe4;font-size:12px;margin:12px 0 6px}
+.full{width:100%;margin-top:12px}
+.qr-area{display:flex;gap:15px;align-items:center;margin-top:16px;padding:13px;background:#61e5dc0b;border:1px solid #61e5dc44;border-radius:14px}
+.qrbox{width:125px;height:125px;flex-shrink:0;background:white;border-radius:10px;display:grid;place-items:center;padding:5px}
+.qrbox img,.qrbox canvas{max-width:100%;max-height:100%}
+.code{font-size:22px;letter-spacing:3px;color:var(--green);font-weight:900;overflow-wrap:anywhere}
+.message{display:none;padding:11px;margin-top:12px;border-radius:10px;background:#67e3a510;color:#b5f3d0;border:1px solid #67e3a533;font-size:12px;overflow-wrap:anywhere}
+.message.show{display:block}
+.incoming{max-width:900px;margin:15px auto;background:#61e5dc0b}
+.incoming button{margin:10px 7px 0 0}
+.scanner{display:none;margin-top:12px}
+.scanner.show{display:block}
+#reader{width:100%;color:white}
+#reader video{border-radius:10px}
+.hidden{display:none!important}
+.note{font-size:11px;color:var(--muted);margin-top:15px}
+@media(max-width:650px){
+ .wrap{padding:14px}.devices,.authgrid{grid-template-columns:1fr}
+ .features{grid-template-columns:1fr}
+ .hero h1{font-size:38px}
+ .qr-area{align-items:flex-start}
+ .qrbox{width:105px;height:105px}
+ .dialog{padding:16px}
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<header class="nav">
+ <div class="brand">MobiPC <span>Connect</span></div>
+ <div class="secure">● PRIVATE DEVICE PAIRING</div>
+</header>
+
+<section class="hero">
+ <h1>Connect Across.<br><span>Control With Confidence.</span></h1>
+ <p>Connect your own Windows PC and Android devices securely.</p>
+</section>
+
+<section class="auth">
+ <h3>Account Login</h3>
+ <div class="authgrid">
+  <input id="email" type="email" placeholder="Email address">
+  <input id="password" type="password" placeholder="Password (minimum 6 characters)">
+ </div>
+ <div class="authbuttons">
+  <button id="signup">Create Account</button>
+  <button id="signin">Sign In</button>
+  <button id="signout" class="secondary hidden">Sign Out</button>
+ </div>
+ <div class="status" id="authStatus">Checking account...</div>
+</section>
+
+<section id="incoming" class="incoming hidden"></section>
+
+<main>
+ <h3 style="text-align:center;margin-bottom:16px">SELECT YOUR DEVICE</h3>
+ <div class="devices">
+  <div class="device" id="choosePC">
+   <div class="device-icon">💻</div>
+   <h2>PC / Windows</h2>
+   <p>Register your Windows 10 or 11 computer.</p>
+   <button>Continue on PC →</button>
+  </div>
+
+  <div class="device" id="chooseAndroid">
+   <div class="device-icon">📱</div>
+   <h2>Android / Mobile</h2>
+   <p>Register your Android phone or connect to your PC.</p>
+   <button>Continue on Mobile →</button>
+  </div>
+ </div>
+
+ <div class="features">
+  <div class="feature"><b>QR PAIRING</b>Quick device matching</div>
+  <div class="feature"><b>OWNER APPROVAL</b>Access must be approved</div>
+  <div class="feature"><b>PRIVATE</b>Authorized devices only</div>
+ </div>
+ <p class="note" style="text-align:center">
+  Device pairing is supported. Actual remote screen, keyboard and mouse control
+  require separate Windows and Android companion software and WebRTC.
+ </p>
+</main>
+</div>
+
+<div class="overlay" id="overlay">
+ <div class="dialog">
+  <div class="dialoghead">
+   <h2 id="dialogTitle">Device Setup</h2>
+   <button class="close" id="close">✕</button>
+  </div>
+
+  <p class="status" id="dialogSub"></p>
+
+  <div class="tabs">
+   <button id="registerTab" class="active">REGISTER DEVICE</button>
+   <button id="connectTab" class="secondary">CONNECT DEVICE</button>
+  </div>
+
+  <section id="registerPanel" class="panel">
+   <h3>Register This Device</h3>
+   <label class="label">DEVICE NAME</label>
+   <input id="deviceName" maxlength="32" placeholder="My Windows PC">
+   <button class="full" id="createCode">REGISTER DEVICE & GENERATE QR</button>
+
+   <div id="qrResult" class="qr-area hidden">
+    <div class="qrbox" id="qrcode"></div>
+    <div>
+     <div class="status">YOUR DEVICE CODE</div>
+     <div class="code" id="codeText">----</div>
+     <button class="secondary full" id="copyCode">COPY CODE</button>
+    </div>
+   </div>
+   <div class="message" id="registerMsg"></div>
+  </section>
+
+  <section id="connectPanel" class="panel hidden">
+   <h3>Connect To Another Device</h3>
+   <label class="label">DEVICE PAIRING CODE</label>
+   <input id="manualCode" maxlength="9" placeholder="ABCD-1234">
+   <button class="full" id="sendRequest">SEND CONNECTION REQUEST</button>
+   <button class="secondary full" id="scanButton">▦ SCAN QR CODE</button>
+   <div class="scanner" id="scanner">
+    <div id="reader"></div>
+    <button class="secondary full" id="stopScan">STOP SCANNER</button>
+   </div>
+   <div class="message" id="connectMsg"></div>
+  </section>
+
+  <p class="note">Only approve requests from devices you recognize. Never share your pairing code publicly.</p>
+  <button class="secondary full" id="back">BACK</button>
+ </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<script>
+(() => {
+'use strict';
+
+/* SUPABASE PROJECT SETTINGS */
+const SUPABASE_URL = 'https://gegjyispaemvrhfutwvq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_DlaBLeMylfFdYOzEmIXlzQ_JAKizG2h';
+
+const $ = id => document.getElementById(id);
+
+let sb = null;
+let session = null;
+let currentDevice = 'pc';
+let currentCode = '';
+let scanner = null;
+let channel = null;
+let requestStatusChannel = null;
+
+const overlay = $('overlay');
+
+function showMessage(id, text) {
+ const el = $(id);
+ el.textContent = text;
+ el.classList.add('show');
+}
+
+function setStatus(text) {
+ $('authStatus').textContent = text;
+}
+
+function requireLogin() {
+ if (!session?.user) {
+  showMessage('registerMsg','Please sign in first.');
+  return false;
+ }
+ return true;
+}
+
+function generateCode() {
+ const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+ const bytes = new Uint8Array(8);
+ crypto.getRandomValues(bytes);
+ let s = '';
+ for (let i=0;i<8;i++) s += chars[bytes[i] % chars.length];
+ return s.slice(0,4) + '-' + s.slice(4);
+}
+
+function openDevice(type) {
+ currentDevice = type;
+ $('dialogTitle').textContent = type === 'pc' ? 'PC Setup' : 'Android Setup';
+ $('dialogSub').textContent = type === 'pc'
+  ? 'Register this Windows computer or connect to your phone.'
+  : 'Register this Android phone or connect to your PC.';
+ $('deviceName').value = type === 'pc' ? 'MY WINDOWS PC' : 'MY ANDROID PHONE';
+ $('qrResult').classList.add('hidden');
+ overlay.classList.add('open');
+ switchTab('register');
+}
+
+function closeDialog() {
+ stopScanner();
+ overlay.classList.remove('open');
+}
+
+function switchTab(tab) {
+ const isRegister = tab === 'register';
+ $('registerPanel').classList.toggle('hidden',!isRegister);
+ $('connectPanel').classList.toggle('hidden',isRegister);
+ $('registerTab').classList.toggle('active',isRegister);
+ $('connectTab').classList.toggle('active',!isRegister);
+ $('registerMsg').classList.remove('show');
+ $('connectMsg').classList.remove('show');
+}
+
+$('choosePC').onclick = () => openDevice('pc');
+$('chooseAndroid').onclick = () => openDevice('android');
+$('close').onclick = closeDialog;
+$('back').onclick = closeDialog;
+overlay.onclick = e => { if(e.target === overlay) closeDialog(); };
+$('registerTab').onclick = () => switchTab('register');
+$('connectTab').onclick = () => switchTab('connect');
+
+function updateAuthUI() {
+ const loggedIn = !!session?.user;
+ $('signup').classList.toggle('hidden',loggedIn);
+ $('signin').classList.toggle('hidden',loggedIn);
+ $('signout').classList.toggle('hidden',!loggedIn);
+ setStatus(loggedIn
+  ? 'Signed in as '+session.user.email
+  : 'Not signed in. Create an account or sign in.');
+}
+
+async function initSupabase() {
+ if (!window.supabase?.createClient) {
+  setStatus('Supabase library did not load. Check internet connection.');
+  return;
+ }
+ if (SUPABASE_KEY === 'PASTE_YOUR_PUBLISHABLE_KEY_HERE') {
+  setStatus('Paste your Supabase Publishable Key into the code first.');
+  return;
+ }
+
+ sb = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+ const result = await sb.auth.getSession();
+
+ if (result.error) {
+  setStatus(result.error.message);
+  return;
+ }
+
+ session = result.data.session;
+ updateAuthUI();
+
+ sb.auth.onAuthStateChange((_event,newSession) => {
+  session = newSession;
+  updateAuthUI();
+  if (session) subscribeIncoming();
+  else {
+   if (channel) sb.removeChannel(channel);
+   channel = null;
+   $('incoming').classList.add('hidden');
+  }
+ });
+
+ if (session) subscribeIncoming();
+}
+
+$('signup').onclick = async () => {
+ if (!sb) return setStatus('Supabase is not initialized.');
+ const email = $('email').value.trim();
+ const password = $('password').value;
+
+ if (!email || password.length < 6)
+  return setStatus('Enter a valid email and password with at least 6 characters.');
+
+ const result = await sb.auth.signUp({email,password});
+
+ if (result.error) return setStatus('Signup error: '+result.error.message);
+
+ if (result.data.session) {
+  session = result.data.session;
+  updateAuthUI();
+  subscribeIncoming();
+ } else {
+  setStatus('Account created. Check your email for verification, then sign in.');
+ }
+};
+
+$('signin').onclick = async () => {
+ if (!sb) return setStatus('Supabase is not initialized.');
+ const result = await sb.auth.signInWithPassword({
+  email:$('email').value.trim(),
+  password:$('password').value
+ });
+
+ if (result.error) return setStatus('Login error: '+result.error.message);
+
+ session = result.data.session;
+ updateAuthUI();
+ subscribeIncoming();
+};
+
+$('signout').onclick = async () => {
+ const result = await sb.auth.signOut();
+ if (result.error) return setStatus(result.error.message);
+ session = null;
+ updateAuthUI();
+ if (channel) await sb.removeChannel(channel);
+ channel = null;
+ $('incoming').classList.add('hidden');
+};
+
+/* REGISTER DEVICE */
+$('createCode').onclick = async () => {
+ if (!requireLogin()) return;
+
+ const name = $('deviceName').value.trim();
+ if (!name) return showMessage('registerMsg','Enter a device name.');
+
+ currentCode = generateCode();
+
+ const result = await sb.from('devices').insert({
+  user_id:session.user.id,
+  device_name:name,
+  device_type:currentDevice,
+  device_code:currentCode
+ }).select('id,device_code').single();
+
+ if (result.error)
+  return showMessage('registerMsg','Registration error: '+result.error.message);
+
+ $('codeText').textContent = result.data.device_code;
+ $('qrcode').innerHTML = '';
+
+ if (window.QRCode) {
+  new QRCode($('qrcode'),{
+   text:'MOBIPC-PAIR:'+result.data.device_code,
+   width:110,
+   height:110,
+   correctLevel:QRCode.CorrectLevel.M
+  });
+ }
+
+ $('qrResult').classList.remove('hidden');
+ showMessage('registerMsg','Device successfully registered in Supabase. Keep the code private.');
+ subscribeIncoming();
+};
+
+$('copyCode').onclick = async () => {
+ try {
+  await navigator.clipboard.writeText(currentCode);
+  showMessage('registerMsg','Device code copied.');
+ } catch(e) {
+  showMessage('registerMsg','Your device code: '+currentCode);
+ }
+};
+
+/* REQUEST CONNECTION */
+function formatDeviceCode(rawCode) {
+ const clean = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
+ return clean.length > 4 ? clean.slice(0,4)+'-'+clean.slice(4) : clean;
+}
+
+async function requestConnection(rawCode) {
+ if (!session?.user) {
+  showMessage('connectMsg','Please sign in first.');
+  return;
+ }
+
+ const clean = String(rawCode || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
+ if (clean.length !== 8) {
+  showMessage('connectMsg','Enter a valid 8-character device code.');
+  return;
+ }
+
+ $('sendRequest').disabled = true;
+ showMessage('connectMsg','Checking device code and sending request...');
+
+ try {
+  const result = await sb.rpc('request_device_connection',{
+   p_device_code:clean
+  });
+
+  if (result.error) {
+   showMessage('connectMsg','Request error: '+result.error.message);
+   return;
+  }
+
+  const requestId = result.data;
+  if (!requestId) {
+   showMessage('connectMsg','The server did not return a request ID. Please try again.');
+   return;
+  }
+
+  showMessage('connectMsg','Request sent successfully. Waiting for approval on the other device...');
+  watchRequestStatus(requestId);
+ } catch (error) {
+  showMessage('connectMsg','Connection request failed: '+(error?.message || String(error)));
+ } finally {
+  $('sendRequest').disabled = false;
+ }
+}
+
+$('sendRequest').onclick = () => requestConnection($('manualCode').value);
+
+$('manualCode').oninput = e => {
+ e.target.value = formatDeviceCode(e.target.value);
+};
+
+/* Listen for approval/rejection on the device that sent the request. */
+async function watchRequestStatus(requestId) {
+ if (requestStatusChannel) {
+  await sb.removeChannel(requestStatusChannel);
+  requestStatusChannel = null;
+ }
+
+ const updateStatus = status => {
+  if (status === 'approved') {
+   showMessage('connectMsg','✓ Request approved! Device pairing is approved. Remote screen control is a separate feature.');
+  } else if (status === 'rejected') {
+   showMessage('connectMsg','The device owner rejected this connection request.');
+  } else if (status === 'expired') {
+   showMessage('connectMsg','This connection request has expired. Send a new request.');
+  } else if (status === 'pending') {
+   showMessage('connectMsg','Request sent successfully. Waiting for device owner approval...');
+  }
+ };
+
+ requestStatusChannel = sb.channel('mobipc-request-'+requestId)
+  .on('postgres_changes',{
+   event:'UPDATE',
+   schema:'public',
+   table:'connection_requests',
+   filter:'id=eq.'+requestId
+  },payload => updateStatus(payload.new.status))
+  .subscribe(async status => {
+   if (status === 'SUBSCRIBED') {
+    const latest = await sb.from('connection_requests')
+     .select('status')
+     .eq('id',requestId)
+     .maybeSingle();
+    if (latest.data) updateStatus(latest.data.status);
+    if (latest.error) showMessage('connectMsg','Request sent. Could not refresh status: '+latest.error.message);
+   }
+  });
+}
+
+/* QR SCANNER */
+$('scanButton').onclick = async () => {
+ if (!session?.user) return showMessage('connectMsg','Please sign in first.');
+
+ if (!window.Html5Qrcode)
+  return showMessage('connectMsg','QR scanner library did not load. Check your internet connection and refresh.');
+
+ if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
+  return showMessage('connectMsg','Camera access requires HTTPS (or localhost). Open this page using its HTTPS website link, not a normal HTTP link.');
+
+ $('scanner').classList.add('show');
+ $('scanButton').disabled = true;
+ showMessage('connectMsg','Starting camera. If Chrome asks, choose Allow.');
+
+ try {
+  scanner = new Html5Qrcode('reader');
+  await scanner.start(
+   {facingMode:'environment'},
+   {fps:10,qrbox:{width:220,height:220},aspectRatio:1.0},
+   async decoded => {
+    const value = decoded.trim();
+    let code = value;
+    const prefix = 'MOBIPC-PAIR:';
+    if (value.toUpperCase().startsWith(prefix))
+     code = value.substring(prefix.length);
+    else if (/^https?:\/\//i.test(value)) {
+     try {
+      const url = new URL(value);
+      code = url.searchParams.get('code') || url.hash.replace(/^#/, '') || value;
+     } catch(e) {}
+    }
+
+    const clean = code.toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if (clean.length !== 8) {
+     showMessage('connectMsg','QR detected, but it does not contain a valid MobiPC 8-character pairing code.');
+     return;
+    }
+
+    $('manualCode').value = formatDeviceCode(clean);
+    await stopScanner();
+    await requestConnection(clean);
+   },
+   () => {}
+  );
+  showMessage('connectMsg','Camera is running. Point it at the MobiPC Connect QR code.');
+ } catch(error) {
+  const detail = error?.message || String(error);
+  showMessage('connectMsg','Camera could not start: '+detail+'. Check Chrome camera permission and open the site over HTTPS.');
+  await stopScanner();
+ }
+};
+
+async function stopScanner() {
+ const activeScanner = scanner;
+ scanner = null;
+ if (activeScanner) {
+  try {
+   if (activeScanner.isScanning) await activeScanner.stop();
+   await activeScanner.clear();
+  } catch(error) {
+   console.warn('Scanner stop:',error);
+  }
+ }
+ $('scanner').classList.remove('show');
+ $('scanButton').disabled = false;
+}
+$('stopScan').onclick = stopScanner;
+
+/* REALTIME INCOMING REQUESTS */
+async function showIncomingRequest(req) {
+ if (!session?.user || !req || req.status !== 'pending') return;
+
+ const device = await sb.from('devices')
+  .select('device_name')
+  .eq('id',req.target_device_id)
+  .eq('user_id',session.user.id)
+  .maybeSingle();
+
+ if (device.error || !device.data) return;
+
+ const box = $('incoming');
+ box.classList.remove('hidden');
+ box.innerHTML =
+  '<b>Incoming connection request</b>'+
+  '<p>Request for '+escapeHTML(device.data.device_name)+
+  '. Approve only if you recognize the requester.</p>'+
+  '<button id="approveRequest">APPROVE</button>'+
+  '<button id="rejectRequest" class="danger">REJECT</button>';
+
+ $('approveRequest').onclick = () => respondRequest(req.id,'approve');
+ $('rejectRequest').onclick = () => respondRequest(req.id,'reject');
+}
+
+async function subscribeIncoming() {
+ if (!sb || !session?.user) return;
+
+ if (channel) await sb.removeChannel(channel);
+
+ /* Load requests that arrived before the realtime listener connected. */
+ const pending = await sb.from('connection_requests')
+  .select('id,target_device_id,status,created_at')
+  .eq('status','pending')
+  .order('created_at',{ascending:false})
+  .limit(10);
+
+ if (!pending.error && pending.data?.length) {
+  for (const req of pending.data) {
+   await showIncomingRequest(req);
+   if (!$('incoming').classList.contains('hidden')) break;
+  }
+ }
+
+ const userId = session.user.id;
+ channel = sb.channel('mobipc-user-'+userId)
+  .on('postgres_changes',{
+   event:'INSERT',
+   schema:'public',
+   table:'connection_requests'
+  },async payload => {
+   await showIncomingRequest(payload.new);
+  })
+  .subscribe(status => {
+   if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+    console.warn('Incoming request realtime status:',status);
+   }
+  });
+}
+
+function escapeHTML(value) {
+ return String(value).replace(/[&<>"']/g,c=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+ }[c]));
+}
+
+async function respondRequest(id,decision) {
+ const approveButton = $('approveRequest');
+ const rejectButton = $('rejectRequest');
+ if (approveButton) approveButton.disabled = true;
+ if (rejectButton) rejectButton.disabled = true;
+
+ try {
+  const result = await sb.rpc('respond_device_connection',{
+   p_request_id:id,
+   p_decision:decision
+  });
+
+  if (result.error) {
+   $('incoming').textContent = 'Could not update request: '+result.error.message;
+   return;
+  }
+
+  $('incoming').textContent = decision === 'approve'
+   ? '✓ Request approved. Pairing is approved, but remote screen control is not implemented yet.'
+   : 'Connection request rejected.';
+ } catch(error) {
+  $('incoming').textContent = 'Could not update request: '+(error?.message || String(error));
+ }
+}
+
+initSupabase();
+})();
+</script>
+</body>
+</html>
