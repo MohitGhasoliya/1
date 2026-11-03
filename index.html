@@ -120,6 +120,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .request-card .request-actions button{flex:1}
 .scanner{display:none;margin-top:12px}
 .scanner.show{display:block}
+#screenPreview:empty{display:none}
+#screenOverlay .dialog{max-height:94vh}
 #reader{width:100%;color:white}
 #reader video{border-radius:10px}
 .hidden{display:none!important}
@@ -203,7 +205,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
   <div class="feature"><b>PRIVATE</b>Authorized devices only</div>
  </div>
  <p class="note" style="text-align:center">
-  Pairing and approval are supported. Live PC screen viewing and remote input require a separate Windows agent, Android permissions and WebRTC.
+  Pairing and approval are supported. Screen preview permission can be tested here; live remote viewing and remote input are being added in stages.
  </p>
 </main>
 </div>
@@ -260,6 +262,24 @@ button:disabled{opacity:.5;cursor:not-allowed}
 
   <p class="note">Only approve requests from devices you recognize. Never share your pairing code publicly.</p>
   <button class="secondary full" id="back">BACK</button>
+ </div>
+</div>
+
+<!-- Screen check / permission panel -->
+<div class="overlay" id="screenOverlay" aria-hidden="true">
+ <div class="dialog" style="width:min(100%,900px)">
+  <div class="dialoghead">
+   <h2>🖥️ Check Screen</h2>
+   <button class="close" id="screenClose">✕</button>
+  </div>
+  <p class="status" id="screenStatus">Screen sharing is off. Start only when you are ready.</p>
+  <div style="background:#050914;border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:180px;display:grid;place-items:center;margin-top:14px">
+   <video id="screenPreview" autoplay playsinline muted style="width:100%;max-height:62vh;object-fit:contain"></video>
+   <div id="screenPlaceholder" class="status" style="padding:28px;text-align:center">Your screen preview will appear here after you grant browser permission.</div>
+  </div>
+  <button id="startScreenShare" class="full">ALLOW & START SCREEN PREVIEW</button>
+  <button id="stopScreenShare" class="secondary full" disabled>STOP SCREEN SHARING</button>
+  <p class="note">Your browser will show its own screen-sharing permission dialog. You choose what to share and can stop at any time. This website build currently tests local screen capture only; live video transmission to the paired device and remote input are the next implementation stage.</p>
  </div>
 </div>
 
@@ -828,6 +848,16 @@ async function refreshOutgoingStatus() {
  $('savedMsg').textContent = message;
  $('connectMsg').textContent = message;
  $('connectMsg').classList.add('show');
+ const oldScreenBtn = document.getElementById('checkScreenBtn');
+ if (oldScreenBtn) oldScreenBtn.remove();
+ if (status === 'approved') {
+  const screenBtn = document.createElement('button');
+  screenBtn.id = 'checkScreenBtn';
+  screenBtn.className = 'full';
+  screenBtn.textContent = '🖥️ CHECK SCREEN';
+  screenBtn.onclick = openScreenCheck;
+  $('connectMsg').appendChild(screenBtn);
+ }
  if (status !== 'pending' && outgoingPollTimer) {
   clearInterval(outgoingPollTimer);
   outgoingPollTimer = null;
@@ -841,6 +871,51 @@ function subscribeRequestStatus() {
   outgoingPollTimer = setInterval(refreshOutgoingStatus,5000);
  }
 }
+let activeScreenStream = null;
+function openScreenCheck() {
+ const overlay = $('screenOverlay');
+ overlay.classList.add('open');
+ overlay.setAttribute('aria-hidden','false');
+ $('screenStatus').textContent = 'Screen sharing is off. Choose Allow & Start when ready.';
+}
+function closeScreenCheck() {
+ if (activeScreenStream) stopScreenShare();
+ $('screenOverlay').classList.remove('open');
+ $('screenOverlay').setAttribute('aria-hidden','true');
+}
+async function startScreenShare() {
+ if (!navigator.mediaDevices?.getDisplayMedia) {
+  $('screenStatus').textContent = 'Screen capture is not supported in this browser. Open this site in an up-to-date desktop browser over HTTPS.';
+  return;
+ }
+ try {
+  activeScreenStream = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:15},audio:false});
+  $('screenPreview').srcObject = activeScreenStream;
+  $('screenPlaceholder').classList.add('hidden');
+  $('startScreenShare').disabled = true;
+  $('stopScreenShare').disabled = false;
+  $('screenStatus').textContent = 'Screen preview is active on this device. You can stop sharing at any time.';
+  activeScreenStream.getVideoTracks()[0].addEventListener('ended', stopScreenShare, {once:true});
+ } catch (err) {
+  $('screenStatus').textContent = err?.name === 'NotAllowedError'
+   ? 'Screen sharing was cancelled or permission was not granted.'
+   : 'Could not start screen sharing: ' + (err?.message || err);
+ }
+}
+function stopScreenShare() {
+ if (activeScreenStream) activeScreenStream.getTracks().forEach(track => track.stop());
+ activeScreenStream = null;
+ $('screenPreview').srcObject = null;
+ $('screenPlaceholder').classList.remove('hidden');
+ $('startScreenShare').disabled = false;
+ $('stopScreenShare').disabled = true;
+ $('screenStatus').textContent = 'Screen sharing stopped.';
+}
+$('screenClose').onclick = closeScreenCheck;
+$('startScreenShare').onclick = startScreenShare;
+$('stopScreenShare').onclick = stopScreenShare;
+$('screenOverlay').addEventListener('click', e => { if (e.target === $('screenOverlay')) closeScreenCheck(); });
+
 function escapeHTML(value) {
  return String(value).replace(/[&<>"']/g,c=>({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
