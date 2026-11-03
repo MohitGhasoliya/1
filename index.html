@@ -112,6 +112,12 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .message.show{display:block}
 .incoming{max-width:900px;margin:15px auto;background:#61e5dc0b}
 .incoming button{margin:10px 7px 0 0}
+.panel-incoming{margin-top:18px;padding:14px;border:1px solid #61e5dc44;border-radius:14px;background:#61e5dc08}
+.panel-incoming h4{margin:0 0 6px}
+.request-empty{padding:10px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:12px}
+.request-card{margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#111a2b}
+.request-card .request-actions{display:flex;gap:8px;margin-top:10px}
+.request-card .request-actions button{flex:1}
 .scanner{display:none;margin-top:12px}
 .scanner.show{display:block}
 #reader{width:100%;color:white}
@@ -144,8 +150,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </section>
 
 <section class="auth">
- <h3>Account Login</h3>
- <div class="authgrid">
+ <h3 id="authTitle">Account Login</h3>
+ <div class="authgrid" id="authGrid">
   <input id="email" type="email" placeholder="Email address">
   <input id="password" type="password" placeholder="Password (minimum 6 characters)">
  </div>
@@ -192,8 +198,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
   <div class="feature"><b>PRIVATE</b>Authorized devices only</div>
  </div>
  <p class="note" style="text-align:center">
-  Device pairing is supported. Actual remote screen, keyboard and mouse control
-  require separate Windows and Android companion software and WebRTC.
+  Pairing and approval are supported. Live PC screen viewing and remote input require a separate Windows agent, Android permissions and WebRTC.
  </p>
 </main>
 </div>
@@ -228,6 +233,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
     </div>
    </div>
    <div class="message" id="registerMsg"></div>
+   <section class="panel-incoming" id="panelIncoming">
+    <h4>📥 Incoming Requests</h4>
+    <div class="saved-meta">Requests for this device will appear here. Keep this page open to receive them.</div>
+    <div id="panelIncomingList" style="margin-top:10px"><div class="request-empty">Open this device panel to check requests.</div></div>
+   </section>
   </section>
 
   <section id="connectPanel" class="panel hidden">
@@ -399,7 +409,7 @@ function openDevice(type) {
  $('createCode').textContent = 'SAVE / LOAD THIS DEVICE';
  registeredDevice = null;
  overlay.classList.add('open');
- if (session?.user) loadLocalRegisteredDevice(type);
+ if (session?.user) { loadLocalRegisteredDevice(type); refreshIncomingRequests(); }
  switchTab('register');
 }
 
@@ -427,6 +437,7 @@ function switchTab(tab) {
  $('connectTab').classList.toggle('active',!isRegister);
  $('registerMsg').classList.remove('show');
  $('connectMsg').classList.remove('show');
+ if (isRegister && session?.user) refreshIncomingRequests();
 }
 
 $('choosePC').onclick = () => openDevice('pc');
@@ -439,12 +450,15 @@ $('connectTab').onclick = () => switchTab('connect');
 
 function updateAuthUI() {
  const loggedIn = !!session?.user;
- $('signup').classList.toggle('hidden',loggedIn);
- $('signin').classList.toggle('hidden',loggedIn);
- $('signout').classList.toggle('hidden',!loggedIn);
+ // Keep the login form out of sight once the account is signed in.
+ $('authGrid').classList.toggle('hidden', loggedIn);
+ $('signup').classList.toggle('hidden', loggedIn);
+ $('signin').classList.toggle('hidden', loggedIn);
+ $('signout').classList.toggle('hidden', !loggedIn);
+ $('authTitle').textContent = loggedIn ? 'Account Connected' : 'Account Login';
  setStatus(loggedIn
-  ? 'Signed in as '+session.user.email
-  : 'Not signed in. Create an account or sign in.');
+  ? '✓ Signed in as ' + (session.user.email || 'your account') + '. Your saved devices are available below.'
+  : 'Not signed in. Enter your email and password to continue.');
 }
 
 async function initSupabase() {
@@ -723,41 +737,36 @@ $('stopScan').onclick = stopScanner;
 /* INCOMING REQUESTS: polling is used as a reliable fallback to Realtime */
 async function refreshIncomingRequests() {
  if (!sb || !session?.user) return;
- const {data: requests,error} = await sb.from('connection_requests')
-  .select('id,target_device_id,requester_id,status,created_at')
-  .eq('status','pending')
-  .order('created_at',{ascending:false})
-  .limit(20);
+ const list = $('panelIncomingList');
+ if (!list) return;
+ const {data: requests,error} = await sb.rpc('get_incoming_device_requests');
  if (error) {
-  $('incoming').classList.add('hidden');
+  list.innerHTML = '<div class="request-empty">Could not load requests: ' + escapeHTML(error.message) + '<br>Check that the incoming-requests SQL function has been created in Supabase.</div>';
   return;
  }
- const owned = [];
- for (const req of (requests || [])) {
-  const {data: device} = await sb.from('devices')
-   .select('device_name,device_type')
-   .eq('id',req.target_device_id)
-   .eq('user_id',session.user.id)
-   .maybeSingle();
-  if (device) owned.push({req,device});
- }
- const box = $('incoming');
+ const owned = (requests || []).filter(req => String(req.device_type || '').toLowerCase() === currentDevice);
  if (!owned.length) {
-  box.classList.add('hidden');
-  box.innerHTML = '';
+  list.innerHTML = '<div class="request-empty">No pending requests for this ' + (currentDevice === 'pc' ? 'PC' : 'Android device') + '.</div>';
   return;
  }
- box.classList.remove('hidden');
- box.innerHTML = '<b>Incoming connection requests</b>' + owned.map(({req,device}) =>
-  '<div class="saved-card" style="margin-top:10px">' +
-  '<b>Request for ' + escapeHTML(device.device_name) + '</b>' +
-  '<div class="saved-meta">From another signed-in account/device · ' + new Date(req.created_at).toLocaleString() + '</div>' +
-  '<button data-approve="' + req.id + '">APPROVE</button>' +
-  '<button class="danger" data-reject="' + req.id + '">REJECT</button>' +
-  '</div>'
+ list.innerHTML = owned.map(req =>
+  '<article class="request-card">' +
+   '<b>Connection request for ' + escapeHTML(req.device_name) + '</b>' +
+   '<div class="saved-meta">' + escapeHTML(req.device_type === 'pc' ? 'Windows PC' : 'Android device') + ' · ' + new Date(req.created_at).toLocaleString() + '</div>' +
+   '<div class="request-actions">' +
+    '<button data-approve="' + req.request_id + '">ACCEPT</button>' +
+    '<button class="danger" data-reject="' + req.request_id + '">REJECT</button>' +
+   '</div>' +
+  '</article>'
  ).join('');
- box.querySelectorAll('[data-approve]').forEach(btn => btn.onclick = () => respondRequest(btn.dataset.approve,'approve'));
- box.querySelectorAll('[data-reject]').forEach(btn => btn.onclick = () => respondRequest(btn.dataset.reject,'reject'));
+ list.querySelectorAll('[data-approve]').forEach(btn => btn.onclick = async () => {
+  btn.disabled = true; btn.textContent = 'ACCEPTING...';
+  await respondRequest(btn.dataset.approve,'approve');
+ });
+ list.querySelectorAll('[data-reject]').forEach(btn => btn.onclick = async () => {
+  btn.disabled = true; btn.textContent = 'REJECTING...';
+  await respondRequest(btn.dataset.reject,'reject');
+ });
 }
 
 async function subscribeIncoming() {
@@ -815,10 +824,11 @@ async function respondRequest(id,decision) {
   return;
  }
 
- $('incoming').textContent = decision === 'approve'
-  ? 'Request approved. Pairing is approved, but remote control is not implemented yet.'
-  : 'Connection request rejected.';
+ showMessage('registerMsg', decision === 'approve'
+  ? 'Request accepted. The requesting device will see APPROVED. Remote screen viewing is not active yet.'
+  : 'Connection request rejected.');
  await refreshIncomingRequests();
+ await refreshOutgoingStatus();
  loadSavedDevices();
 }
 
