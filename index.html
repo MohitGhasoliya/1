@@ -25,8 +25,8 @@
 </header>
 
 <section class="hero">
- <h1>Connect Across.<br><span>Control With Confidence.</span></h1>
- <p>Connect your own Windows PC and Android devices securely.</p>
+ <h1>Connect Devices.<br><span>Pair Securely.</span></h1>
+ <p>Register devices, send connection requests and approve trusted pairing from one dashboard.</p>
 </section>
 
 <section class="auth">
@@ -117,7 +117,7 @@
    <h3>Connect To Another Device</h3>
    <label class="label">DEVICE PAIRING CODE</label>
    <input id="manualCode" maxlength="9" placeholder="ABCD-1234">
-   <button class="full" id="sendRequest">SEND CONNECTION REQUEST</button>
+   <button class="full" id="sendRequest">CONNECT TO DEVICE</button><div class="note">After approval, the remote-screen panel opens automatically. Actual live video and remote input need the WebRTC/native connection module.</div>
    <button class="secondary full" id="scanButton">▦ SCAN QR CODE</button>
    <div class="scanner" id="scanner">
     <div id="reader"></div>
@@ -146,6 +146,20 @@
   <button id="startScreenShare" class="full">ALLOW & START SCREEN SHARE</button>
   <button id="stopScreenShare" class="secondary full" disabled>STOP SCREEN SHARING</button>
   <p class="note">Your browser will ask which screen or window to share. This browser preview is local only. It does not yet stream to the paired device. Live remote viewing and persistent background operation require a completed WebRTC connection and native companion apps.</p>
+ </div>
+</div>
+
+<div class="overlay" id="remoteViewerOverlay" aria-hidden="true">
+ <div class="dialog" style="width:min(100%,1000px)">
+  <div class="dialoghead"><h2>🖥️ Remote Device Screen</h2><button class="close" id="remoteViewerClose">✕</button></div>
+  <p class="status" id="remoteViewerStatus">Pairing approved.</p>
+  <div style="background:#050914;border:1px solid var(--line);border-radius:14px;min-height:260px;display:grid;place-items:center;margin-top:14px;overflow:hidden">
+   <video id="remoteViewerVideo" autoplay playsinline style="width:100%;max-height:65vh;object-fit:contain"></video>
+   <div id="remoteViewerPlaceholder" style="padding:30px;text-align:center"><div style="font-size:42px">🔗</div><b>Device paired successfully</b><p class="status">Live screen appears here after WebRTC screen transport is connected.</p></div>
+  </div>
+  <div class="features"><div class="feature"><b>SCREEN</b><span id="remoteScreenState">Waiting for WebRTC</span></div><div class="feature"><b>INPUT CONTROL</b>Not connected</div><div class="feature"><b>SESSION</b>Pairing approved</div></div>
+  <p class="note">Important: this HTML currently supports login, device registration and pairing approval only. Live screen video and mouse/keyboard control are not implemented yet.</p>
+  <button class="secondary full" id="remoteViewerDone">CLOSE VIEWER</button>
  </div>
 </div>
 
@@ -698,6 +712,24 @@ async function subscribeIncoming() {
  incomingPollTimer = setInterval(refreshIncomingRequests,5000);
 }
 
+let lastOpenedApprovedRequestId = null;
+function openRemoteViewer() {
+ const viewer = $('remoteViewerOverlay');
+ viewer.classList.add('open');
+ viewer.setAttribute('aria-hidden','false');
+ $('remoteViewerStatus').textContent = 'Pairing approved. Waiting for WebRTC screen transport (not yet included in this HTML build).';
+ $('remoteScreenState').textContent = 'Waiting for WebRTC';
+ $('remoteViewerPlaceholder').classList.remove('hidden');
+ $('remoteViewerVideo').srcObject = null;
+}
+function closeRemoteViewer() {
+ $('remoteViewerOverlay').classList.remove('open');
+ $('remoteViewerOverlay').setAttribute('aria-hidden','true');
+}
+$('remoteViewerClose').onclick = closeRemoteViewer;
+$('remoteViewerDone').onclick = closeRemoteViewer;
+$('remoteViewerOverlay').addEventListener('click', e => { if (e.target === $('remoteViewerOverlay')) closeRemoteViewer(); });
+
 async function refreshOutgoingStatus() {
  if (!sb || !session?.user || !currentOutgoingRequestId) return;
  const {data,error} = await sb.from('connection_requests')
@@ -707,7 +739,7 @@ async function refreshOutgoingStatus() {
  if (error || !data) return;
  const status = String(data.status || 'pending').toLowerCase();
  const message = status === 'approved'
-  ? 'APPROVED: Device owner approved pairing. Start a separate screen-sharing session to view the device; remote streaming is not connected in this build.'
+  ? '✓ CONNECT SUCCESSFUL — device owner approved. Opening the remote screen panel…'
   : status === 'rejected'
    ? 'REJECTED: The device owner rejected the connection request.'
    : status === 'expired'
@@ -716,15 +748,9 @@ async function refreshOutgoingStatus() {
  $('savedMsg').textContent = message;
  $('connectMsg').textContent = message;
  $('connectMsg').classList.add('show');
- const oldScreenBtn = document.getElementById('checkScreenBtn');
- if (oldScreenBtn) oldScreenBtn.remove();
- if (status === 'approved') {
-  const screenBtn = document.createElement('button');
-  screenBtn.id = 'checkScreenBtn';
-  screenBtn.className = 'full';
-  screenBtn.textContent = '🖥️ CHECK SCREEN';
-  screenBtn.onclick = openScreenCheck;
-  $('connectMsg').appendChild(screenBtn);
+ if (status === 'approved' && lastOpenedApprovedRequestId !== currentOutgoingRequestId) {
+  lastOpenedApprovedRequestId = currentOutgoingRequestId;
+  openRemoteViewer();
  }
  if (status !== 'pending' && outgoingPollTimer) {
   clearInterval(outgoingPollTimer);
