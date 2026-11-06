@@ -5,12 +5,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#080d1a">
-<title>MobiPC Connect</title>
+<title>MobiPC Connect — Remote Device Dashboard</title>
 
 <style>
 :root{--bg:#080d18;--surface:#101a2b;--surface2:#15233a;--line:#263852;--text:#f3f7ff;--muted:#9aabc4;--cyan:#54e2d2;--blue:#829cff;--green:#62dda0;--red:#ff8192;--shadow:0 18px 55px #0005}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 12% 0%,#173a5b 0,transparent 34%),radial-gradient(ellipse at 95% 60%,#20234a 0,transparent 32%),var(--bg);color:var(--text);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Arial,sans-serif}button,input{font:inherit}button{cursor:pointer;transition:.18s ease}button:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.08)}button:disabled{opacity:.48;cursor:not-allowed}.wrap{max-width:1180px;margin:auto;padding:24px}.nav{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 18px;background:#0d1728c9;border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(14px);box-shadow:var(--shadow)}.brand{font-size:21px;font-weight:900;letter-spacing:-.5px}.brand span{color:var(--cyan)}.secure{font-size:11px;color:var(--green);letter-spacing:1.1px;font-weight:800}.hero{padding:46px 16px 34px;text-align:center;max-width:760px;margin:auto}.hero h1{font-size:clamp(34px,6vw,58px);line-height:1.04;letter-spacing:-2px;margin:12px 0}.hero h1 span{color:var(--cyan)}.hero p{color:var(--muted);max-width:590px;margin:15px auto}.auth,.saved-wrap,.device,.panel,.incoming{background:linear-gradient(145deg,#14233aee,#0e1929f2);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}.auth{max-width:900px;margin:0 auto 26px;padding:22px}.auth h3{margin:0 0 15px}.authgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px}input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid #344761;background:#091321;color:white;outline:none}input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px #54e2d21b}button{border:1px solid transparent;border-radius:12px;padding:12px 16px;background:linear-gradient(110deg,var(--cyan),#a4f0db);color:#071520;font-weight:850}button.secondary{background:#ffffff08;color:#eaf2ff;border-color:#344761}button.danger{background:#ff8192;color:#27070c}.authbuttons{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.status{font-size:12px;color:var(--muted);margin-top:12px;overflow-wrap:anywhere}.devices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.device{padding:23px;cursor:pointer;position:relative;overflow:hidden;transition:.2s}.device:after{content:"";position:absolute;width:160px;height:160px;border-radius:50%;background:#54e2d20c;right:-50px;top:-60px}.device:hover{border-color:var(--cyan);transform:translateY(-3px)}.device-icon{font-size:36px}.device h2{margin:9px 0 4px}.device p{color:var(--muted);font-size:13px;min-height:40px}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}.feature{padding:16px;border:1px solid var(--line);border-radius:15px;text-align:center;color:var(--muted);font-size:12px;background:#ffffff04}.feature b{display:block;color:white;margin-bottom:5px}.saved-wrap{margin:24px auto;padding:22px}.saved-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.saved-head h3{margin:0;font-size:16px;letter-spacing:.3px}.saved-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:12px;margin-top:15px}.saved-card{border:1px solid #2b3d57;background:#0b1524;border-radius:15px;padding:15px;min-width:0}.saved-card h4{margin:0 0 7px;font-size:15px;overflow-wrap:anywhere}.saved-meta{color:var(--muted);font-size:12px}.online-dot,.offline-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.online-dot{background:var(--green);box-shadow:0 0 10px #62dda077}.offline-dot{background:#8290a8}.saved-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.saved-actions button{flex:1;padding:9px 10px;font-size:11px}.code-actions{display:flex;gap:8px;flex-wrap:wrap;width:100%}.code-actions button{flex:1}.overlay{display:none;position:fixed;inset:0;z-index:10;background:#030712eF;backdrop-filter:blur(12px);padding:15px;align-items:center;justify-content:center}.overlay.open{display:flex}.dialog{width:min(100%,600px);max-height:92vh;overflow:auto;background:#111d30;border:1px solid #354762;border-radius:22px;padding:23px;box-shadow:var(--shadow)}.dialoghead{display:flex;justify-content:space-between;align-items:center;gap:12px}.dialoghead h2{margin:0}.close{background:#ffffff10;color:white;padding:8px 13px;border-color:var(--line)}.tabs{display:flex;gap:8px;margin:18px 0}.tabs button{flex:1}.tabs button.active{background:var(--blue);color:#081224}.panel{background:#0a1423;padding:18px;box-shadow:none}.panel h3{margin:0 0 10px}.label{display:block;color:#c3cfe4;font-size:11px;font-weight:800;letter-spacing:.8px;margin:13px 0 6px}.full{width:100%;margin-top:11px}.qr-area{display:flex;gap:15px;align-items:center;margin-top:16px;padding:14px;background:#54e2d20c;border:1px solid #54e2d244;border-radius:15px}.qrbox{width:125px;height:125px;flex-shrink:0;background:white;border-radius:10px;display:grid;place-items:center;padding:5px}.qrbox img,.qrbox canvas{max-width:100%;max-height:100%}.code{font-size:22px;letter-spacing:3px;color:var(--green);font-weight:900;overflow-wrap:anywhere}.message{display:none;padding:12px;margin-top:12px;border-radius:12px;background:#62dda012;color:#b5f3d0;border:1px solid #62dda044;font-size:12px;overflow-wrap:anywhere}.message.show{display:block}.incoming{max-width:900px;margin:15px auto;padding:18px;background:#54e2d20b}.incoming button{margin:10px 7px 0 0}.panel-incoming{margin-top:18px;padding:14px;border:1px solid #54e2d244;border-radius:14px;background:#54e2d208}.panel-incoming h4{margin:0 0 6px}.request-empty{padding:12px;border:1px dashed var(--line);border-radius:11px;color:var(--muted);font-size:12px}.request-card{margin-top:10px;padding:13px;border:1px solid var(--line);border-radius:13px;background:#111d30}.request-card .request-actions{display:flex;gap:8px;margin-top:10px}.request-card .request-actions button{flex:1}.scanner{display:none;margin-top:12px}.scanner.show{display:block}#screenPreview:empty{display:none}#screenOverlay .dialog{max-height:94vh}#reader{width:100%;color:white}#reader video{border-radius:10px}.hidden{display:none!important}.note{font-size:11px;color:var(--muted);margin-top:15px}.section-title{display:flex;align-items:center;gap:9px;margin:0 0 14px}.section-title:before{content:"";width:4px;height:20px;border-radius:5px;background:var(--cyan)}
 @media(max-width:680px){.wrap{padding:13px}.nav{padding:13px}.secure{font-size:9px}.hero{padding:34px 8px 25px}.hero h1{font-size:38px;letter-spacing:-1px}.devices,.authgrid{grid-template-columns:1fr}.features{grid-template-columns:1fr}.saved-wrap{padding:15px}.qr-area{align-items:flex-start}.qrbox{width:100px;height:100px}.dialog{padding:16px}.device p{min-height:0}}
+.nav{position:sticky;top:10px;z-index:5}.panel{backdrop-filter:blur(16px)}.saved-card{transition:border-color .2s,transform .2s}.saved-card:hover{border-color:var(--cyan);transform:translateY(-2px)}.hero p{font-size:15px}.features .feature{min-height:84px;display:flex;flex-direction:column;justify-content:center}.auth,.saved-wrap{backdrop-filter:blur(12px)}
+@media(max-width:680px){.nav{position:static}.authbuttons button{flex:1}.saved-actions button{min-width:100px}}
 </style>
 </head>
 
@@ -58,31 +60,19 @@
 </section>
 
 <main>
- <h3 class="section-title" style="justify-content:center">SELECT YOUR DEVICE</h3>
- <div class="devices">
-  <div class="device" id="choosePC">
-   <div class="device-icon">💻</div>
-   <h2>PC / Windows</h2>
-   <p>Register your Windows 10 or 11 computer.</p>
-   <button>Continue on PC →</button>
-  </div>
-
-  <div class="device" id="chooseAndroid">
-   <div class="device-icon">📱</div>
-   <h2>Android / Mobile</h2>
-   <p>Register your Android phone or connect to your PC.</p>
-   <button>Continue on Mobile →</button>
-  </div>
- </div>
-
+ <section class="panel" style="max-width:900px;margin:0 auto 22px;padding:24px;text-align:center">
+  <div style="font-size:38px">🖥️</div>
+  <h2 style="margin:8px 0">This Device</h2>
+  <p class="status" id="detectedDeviceText">Detecting your device automatically…</p>
+  <button id="openThisDevice" class="full" style="max-width:360px">SET UP THIS DEVICE</button>
+  <button id="openConnect" class="secondary full" style="max-width:360px">CONNECT USING DEVICE CODE</button>
+ </section>
  <div class="features">
-  <div class="feature"><b>QR PAIRING</b>Quick device matching</div>
-  <div class="feature"><b>OWNER APPROVAL</b>Access must be approved</div>
-  <div class="feature"><b>PRIVATE</b>Authorized devices only</div>
+  <div class="feature"><b>QR / CODE PAIRING</b>Pair your own devices</div>
+  <div class="feature"><b>OWNER APPROVAL</b>Access requires approval</div>
+  <div class="feature"><b>SESSION CONTROL</b>Stop sharing any time</div>
  </div>
- <p class="note" style="text-align:center">
-  Pairing and approval are supported. Screen-sharing permission can be requested here. Remote viewing and control require a separate secure WebRTC session and explicit approval.
- </p>
+ <p class="note" style="text-align:center">This website can manage pairing while it is open. Browser screen capture cannot run continuously in the background or silently after closing the tab. Native Windows and Android apps are required for persistent background connectivity, with visible sharing status and operating-system permissions.</p>
 </main>
 </div>
 
@@ -151,11 +141,11 @@
   <p class="status" id="screenStatus">Screen sharing is off. Start only when you are ready.</p>
   <div style="background:#050914;border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:180px;display:grid;place-items:center;margin-top:14px">
    <video id="screenPreview" autoplay playsinline muted style="width:100%;max-height:62vh;object-fit:contain"></video>
-   <div id="screenPlaceholder" class="status" style="padding:28px;text-align:center">Your screen preview will appear here after you grant browser permission.</div>
+   <div id="screenPlaceholder" class="status" style="padding:28px;text-align:center">Screen preview will appear here after you grant permission.</div>
   </div>
-  <button id="startScreenShare" class="full">ALLOW & START SCREEN PREVIEW</button>
+  <button id="startScreenShare" class="full">ALLOW & START SCREEN SHARE</button>
   <button id="stopScreenShare" class="secondary full" disabled>STOP SCREEN SHARING</button>
-  <p class="note">Your browser will ask which screen or window to share. This preview is local to this device; it does not yet transmit video to the paired device. Live remote viewing requires a secure WebRTC signaling connection.</p>
+  <p class="note">Your browser will ask which screen or window to share. This browser preview is local only. It does not yet stream to the paired device. Live remote viewing and persistent background operation require a completed WebRTC connection and native companion apps.</p>
  </div>
 </div>
 
@@ -175,7 +165,7 @@ const $ = id => document.getElementById(id);
 
 let sb = null;
 let session = null;
-let currentDevice = 'pc';
+let currentDevice = /Android/i.test(navigator.userAgent) ? 'android' : 'pc';
 let currentCode = '';
 let scanner = null;
 let channel = null;
@@ -357,8 +347,10 @@ function switchTab(tab) {
  if (isRegister && session?.user) refreshIncomingRequests();
 }
 
-$('choosePC').onclick = () => openDevice('pc');
-$('chooseAndroid').onclick = () => openDevice('android');
+const detectedType = /Android/i.test(navigator.userAgent) ? 'android' : 'pc';
+$('detectedDeviceText').textContent = detectedType === 'android' ? 'Android phone detected. Setup will use this device.' : 'Windows / desktop browser detected. Setup will use this device.';
+$('openThisDevice').onclick = () => openDevice(detectedType);
+$('openConnect').onclick = () => { openDevice(detectedType); switchTab('connect'); }; 
 $('close').onclick = closeDialog;
 $('back').onclick = closeDialog;
 overlay.onclick = e => { if(e.target === overlay) closeDialog(); };
