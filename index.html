@@ -47,15 +47,10 @@
 
 <section class="saved-wrap" id="savedWrap">
  <div class="saved-head">
-  <div><h3 class="section-title">MY DEVICES</h3><div class="status">Select a registered device and connect without typing its code again.</div></div>
-  <button class="secondary" id="refreshDevices">↻ REFRESH</button>
+  <div><h3 class="section-title">MY CONNECTED DEVICES</h3><div class="status">Yahan sirf doosre devices dikhne chahiye jinse pairing approve hui hai. Is device ki apni registrations yahan nahi dikhengi.</div></div>
+  <button class="secondary" id="refreshPairedDevices">↻ REFRESH</button>
  </div>
- <div id="savedDevices" class="saved-list"><div class="status">Sign in to see your saved devices.</div></div>
- <div class="saved-head" style="margin-top:22px">
-  <div><h3 class="section-title">PAIRED DEVICES</h3><div class="status">Devices that have previously approved a connection with your device.</div></div>
-  <button class="secondary" id="refreshPairedDevices">↻ REFRESH PAIRED</button>
- </div>
- <div id="pairedDevices" class="saved-list"><div class="status">Sign in to see paired devices.</div></div>
+ <div id="pairedDevices" class="saved-list"><div class="status">Sign in to see connected devices.</div></div>
  <div id="savedMsg" class="status"></div>
 </section>
 
@@ -240,32 +235,6 @@ function showDeviceCode(device) {
 }
 
 async function loadSavedDevices() {
- if (!sb || !session?.user) {
-  $('savedDevices').innerHTML = '<div class="status">Sign in to see your saved devices.</div>';
- $('pairedDevices').innerHTML = '<div class="status">Sign in to see paired devices.</div>';
-  $('pairedDevices').innerHTML = '<div class="status">Sign in to see paired devices.</div>';
-  return;
- }
- $('savedDevices').innerHTML = '<div class="status">Loading your devices...</div>';
- const {data,error} = await sb.from('devices')
-  .select('id,device_name,device_type,device_code,last_seen_at,created_at')
-  .eq('user_id',session.user.id)
-  .order('created_at',{ascending:false});
- if (error) {
-  $('savedDevices').textContent = 'Could not load your devices: ' + error.message;
-  await loadPairedDevices();
-  return;
- }
- savedDevicesCache = data || [];
- if (!savedDevicesCache.length) {
-  $('savedDevices').innerHTML = '<div class="status">No devices registered by this account yet.</div>';
- } else {
-  $('savedDevices').innerHTML = savedDevicesCache.map(d => {
-   const online = d.last_seen_at && (Date.now() - new Date(d.last_seen_at).getTime() < 90000);
-   const icon = d.device_type === 'pc' ? '💻' : '📱';
-   return `<article class="saved-card"><h4>${icon} ${escapeHTML(d.device_name)}</h4><div class="saved-meta">Your ${d.device_type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div><div class="saved-meta">Code: ${escapeHTML(formatCode(d.device_code))}</div></article>`;
-  }).join('');
- }
  await loadPairedDevices();
 }
 
@@ -273,23 +242,49 @@ async function loadPairedDevices() {
  if (!sb || !session?.user) return;
  const host = $('pairedDevices');
  if (!host) return;
- host.innerHTML = '<div class="status">Loading paired devices...</div>';
+ host.innerHTML = '<div class="status">Loading connected devices...</div>';
  const {data,error} = await sb.rpc('get_paired_devices');
  if (error) {
-  host.innerHTML = '<div class="request-empty">Could not load paired devices: ' + escapeHTML(error.message) + '<br>Run the paired-devices SQL supplied with this update in Supabase.</div>';
+  host.innerHTML = '<div class="request-empty">Could not load connected devices: ' + escapeHTML(error.message) + '<br>Supabase get_paired_devices function needs to return peer_device_id, peer_device_name, peer_device_type, peer_last_seen_at and peer_device_code.</div>';
   return;
  }
  const devices = data || [];
  if (!devices.length) {
-  host.innerHTML = '<div class="request-empty">No previously approved devices found yet. After a device request is accepted, it will appear here.</div>';
+  host.innerHTML = '<div class="request-empty">Abhi koi doosra device paired nahi hai. Pehle us device ka code enter karke request bhejo aur us device par ACCEPT karo.</div>';
   return;
  }
  host.innerHTML = devices.map(d => {
-  const online = d.peer_last_seen_at && (Date.now() - new Date(d.peer_last_seen_at).getTime() < 90000);
-  const icon = d.peer_device_type === 'pc' ? '💻' : '📱';
-  const pairedDate = d.paired_at ? new Date(d.paired_at).toLocaleDateString() : 'Previously approved';
-  return `<article class="saved-card"><h4>${icon} ${escapeHTML(d.peer_device_name || 'Paired device')}</h4><div class="saved-meta">${d.peer_device_type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div><div class="saved-meta">✓ Paired with you · ${escapeHTML(pairedDate)}</div><div class="saved-actions"><button class="secondary" disabled>PAIRED DEVICE</button></div></article>`;
+  const seen = d.peer_last_seen_at || d.last_seen_at;
+  const online = seen && (Date.now() - new Date(seen).getTime() < 90000);
+  const type = String(d.peer_device_type || d.device_type || '').toLowerCase();
+  const icon = type === 'pc' ? '💻' : '📱';
+  const code = d.peer_device_code || d.device_code || d.code || '';
+  const peerId = d.peer_device_id || d.device_id || '';
+  return `<article class="saved-card">
+   <h4>${icon} ${escapeHTML(d.peer_device_name || d.device_name || 'Connected device')}</h4>
+   <div class="saved-meta">${type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div>
+   <div class="saved-actions">
+    <button data-connect-code="${escapeHTML(String(code))}" ${(!online || !code) ? 'disabled' : ''}>CONNECT</button>
+    <button class="danger" data-disconnect-peer="${escapeHTML(String(peerId))}" ${!peerId ? 'disabled' : ''}>DISCONNECT</button>
+   </div>
+   ${!code ? '<div class="saved-meta">Connect ke liye get_paired_devices RPC me peer_device_code return karna hoga.</div>' : ''}
+  </article>`;
  }).join('');
+ host.querySelectorAll('[data-connect-code]').forEach(btn => btn.onclick = async () => {
+  if (!btn.disabled) await requestConnection(btn.getAttribute('data-connect-code'), 'savedMsg');
+ });
+ host.querySelectorAll('[data-disconnect-peer]').forEach(btn => btn.onclick = async () => {
+  if (btn.disabled || !confirm('Is device ki pairing hata dein? Agli baar dobara code dalna padega.')) return;
+  btn.disabled = true; btn.textContent = 'DISCONNECTING...';
+  const {error: removeError} = await sb.rpc('remove_paired_device', {p_peer_device_id: btn.getAttribute('data-disconnect-peer')});
+  if (removeError) {
+   $('savedMsg').textContent = 'Disconnect nahi hua: ' + removeError.message + '. Supabase me remove_paired_device RPC banana hoga.';
+   btn.disabled = false; btn.textContent = 'DISCONNECT';
+   return;
+  }
+  $('savedMsg').textContent = 'Device disconnected and pairing removed.';
+  await loadPairedDevices();
+ });
 }
 
 async function startHeartbeat() {
@@ -380,7 +375,7 @@ function updateAuthUI() {
  $('signout').classList.toggle('hidden', !loggedIn);
  $('authTitle').textContent = loggedIn ? 'Account Connected' : 'Account Login';
  setStatus(loggedIn
-  ? '✓ Signed in as ' + (session.user.email || 'your account') + '. Your saved devices are available below.'
+  ? '✓ Signed in as ' + (session.user.email || 'your account') + '. Your paired devices are available below.'
   : 'Not signed in. Enter your email and password to continue.');
 }
 
@@ -480,7 +475,6 @@ $('signout').onclick = async () => {
  if (outgoingPollTimer) clearInterval(outgoingPollTimer); outgoingPollTimer = null;
  if (deviceRefreshTimer) clearInterval(deviceRefreshTimer); deviceRefreshTimer = null;
  $('incoming').classList.add('hidden');
- $('savedDevices').innerHTML = '<div class="status">Sign in to see your saved devices.</div>';
 };
 
 /* REGISTER OR LOAD THE SAME DEVICE */
@@ -611,7 +605,6 @@ async function requestConnection(rawCode, messageTarget = 'connectMsg') {
  outgoingPollTimer = setInterval(refreshOutgoingStatus,5000);
 }
 $('sendRequest').onclick = () => requestConnection($('manualCode').value);
-$('refreshDevices').onclick = loadSavedDevices;
 $('refreshPairedDevices').onclick = loadPairedDevices;
 
 $('manualCode').oninput = e => {
@@ -717,7 +710,7 @@ function openRemoteViewer() {
  const viewer = $('remoteViewerOverlay');
  viewer.classList.add('open');
  viewer.setAttribute('aria-hidden','false');
- $('remoteViewerStatus').textContent = 'Pairing approved. Waiting for WebRTC screen transport (not yet included in this HTML build).';
+ $('remoteViewerStatus').textContent = 'Pairing approved. This HTML build still needs WebRTC signaling and a screen-sharing sender to display the other device.';
  $('remoteScreenState').textContent = 'Waiting for WebRTC';
  $('remoteViewerPlaceholder').classList.remove('hidden');
  $('remoteViewerVideo').srcObject = null;
@@ -739,7 +732,7 @@ async function refreshOutgoingStatus() {
  if (error || !data) return;
  const status = String(data.status || 'pending').toLowerCase();
  const message = status === 'approved'
-  ? '✓ CONNECT SUCCESSFUL — device owner approved. Opening the remote screen panel…'
+  ? '✓ Request approved. Opening viewer; live screen transport must be configured.'
   : status === 'rejected'
    ? 'REJECTED: The device owner rejected the connection request.'
    : status === 'expired'
