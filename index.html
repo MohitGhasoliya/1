@@ -1,160 +1,267 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#080d1a">
-<title>MobiPC Connect — Remote Device Dashboard</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<title>MobiPC Connect — Your devices, one dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#080d18;--surface:#101a2b;--surface2:#15233a;--line:#263852;--text:#f3f7ff;--muted:#9aabc4;--cyan:#54e2d2;--blue:#829cff;--green:#62dda0;--red:#ff8192;--shadow:0 18px 55px #0005}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 12% 0%,#173a5b 0,transparent 34%),radial-gradient(ellipse at 95% 60%,#20234a 0,transparent 32%),var(--bg);color:var(--text);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Arial,sans-serif}button,input{font:inherit}button{cursor:pointer;transition:.18s ease}button:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.08)}button:disabled{opacity:.48;cursor:not-allowed}.wrap{max-width:1180px;margin:auto;padding:24px}.nav{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 18px;background:#0d1728c9;border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(14px);box-shadow:var(--shadow)}.brand{font-size:21px;font-weight:900;letter-spacing:-.5px}.brand span{color:var(--cyan)}.secure{font-size:11px;color:var(--green);letter-spacing:1.1px;font-weight:800}.hero{padding:46px 16px 34px;text-align:center;max-width:760px;margin:auto}.hero h1{font-size:clamp(34px,6vw,58px);line-height:1.04;letter-spacing:-2px;margin:12px 0}.hero h1 span{color:var(--cyan)}.hero p{color:var(--muted);max-width:590px;margin:15px auto}.auth,.saved-wrap,.device,.panel,.incoming{background:linear-gradient(145deg,#14233aee,#0e1929f2);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}.auth{max-width:900px;margin:0 auto 26px;padding:22px}.auth h3{margin:0 0 15px}.authgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px}input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid #344761;background:#091321;color:white;outline:none}input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px #54e2d21b}button{border:1px solid transparent;border-radius:12px;padding:12px 16px;background:linear-gradient(110deg,var(--cyan),#a4f0db);color:#071520;font-weight:850}button.secondary{background:#ffffff08;color:#eaf2ff;border-color:#344761}button.danger{background:#ff8192;color:#27070c}.authbuttons{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.status{font-size:12px;color:var(--muted);margin-top:12px;overflow-wrap:anywhere}.devices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.device{padding:23px;cursor:pointer;position:relative;overflow:hidden;transition:.2s}.device:after{content:"";position:absolute;width:160px;height:160px;border-radius:50%;background:#54e2d20c;right:-50px;top:-60px}.device:hover{border-color:var(--cyan);transform:translateY(-3px)}.device-icon{font-size:36px}.device h2{margin:9px 0 4px}.device p{color:var(--muted);font-size:13px;min-height:40px}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}.feature{padding:16px;border:1px solid var(--line);border-radius:15px;text-align:center;color:var(--muted);font-size:12px;background:#ffffff04}.feature b{display:block;color:white;margin-bottom:5px}.saved-wrap{margin:24px auto;padding:22px}.saved-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.saved-head h3{margin:0;font-size:16px;letter-spacing:.3px}.saved-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:12px;margin-top:15px}.saved-card{border:1px solid #2b3d57;background:#0b1524;border-radius:15px;padding:15px;min-width:0}.saved-card h4{margin:0 0 7px;font-size:15px;overflow-wrap:anywhere}.saved-meta{color:var(--muted);font-size:12px}.online-dot,.offline-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.online-dot{background:var(--green);box-shadow:0 0 10px #62dda077}.offline-dot{background:#8290a8}.saved-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.saved-actions button{flex:1;padding:9px 10px;font-size:11px}.code-actions{display:flex;gap:8px;flex-wrap:wrap;width:100%}.code-actions button{flex:1}.overlay{display:none;position:fixed;inset:0;z-index:10;background:#030712eF;backdrop-filter:blur(12px);padding:15px;align-items:center;justify-content:center}.overlay.open{display:flex}.dialog{width:min(100%,600px);max-height:92vh;overflow:auto;background:#111d30;border:1px solid #354762;border-radius:22px;padding:23px;box-shadow:var(--shadow)}.dialoghead{display:flex;justify-content:space-between;align-items:center;gap:12px}.dialoghead h2{margin:0}.close{background:#ffffff10;color:white;padding:8px 13px;border-color:var(--line)}.tabs{display:flex;gap:8px;margin:18px 0}.tabs button{flex:1}.tabs button.active{background:var(--blue);color:#081224}.panel{background:#0a1423;padding:18px;box-shadow:none}.panel h3{margin:0 0 10px}.label{display:block;color:#c3cfe4;font-size:11px;font-weight:800;letter-spacing:.8px;margin:13px 0 6px}.full{width:100%;margin-top:11px}.qr-area{display:flex;gap:15px;align-items:center;margin-top:16px;padding:14px;background:#54e2d20c;border:1px solid #54e2d244;border-radius:15px}.qrbox{width:125px;height:125px;flex-shrink:0;background:white;border-radius:10px;display:grid;place-items:center;padding:5px}.qrbox img,.qrbox canvas{max-width:100%;max-height:100%}.code{font-size:22px;letter-spacing:3px;color:var(--green);font-weight:900;overflow-wrap:anywhere}.message{display:none;padding:12px;margin-top:12px;border-radius:12px;background:#62dda012;color:#b5f3d0;border:1px solid #62dda044;font-size:12px;overflow-wrap:anywhere}.message.show{display:block}.incoming{max-width:900px;margin:15px auto;padding:18px;background:#54e2d20b}.incoming button{margin:10px 7px 0 0}.panel-incoming{margin-top:18px;padding:14px;border:1px solid #54e2d244;border-radius:14px;background:#54e2d208}.panel-incoming h4{margin:0 0 6px}.request-empty{padding:12px;border:1px dashed var(--line);border-radius:11px;color:var(--muted);font-size:12px}.request-card{margin-top:10px;padding:13px;border:1px solid var(--line);border-radius:13px;background:#111d30}.request-card .request-actions{display:flex;gap:8px;margin-top:10px}.request-card .request-actions button{flex:1}.scanner{display:none;margin-top:12px}.scanner.show{display:block}#screenPreview:empty{display:none}#screenOverlay .dialog{max-height:94vh}#reader{width:100%;color:white}#reader video{border-radius:10px}.hidden{display:none!important}.note{font-size:11px;color:var(--muted);margin-top:15px}.section-title{display:flex;align-items:center;gap:9px;margin:0 0 14px}.section-title:before{content:"";width:4px;height:20px;border-radius:5px;background:var(--cyan)}
-@media(max-width:680px){.wrap{padding:13px}.nav{padding:13px}.secure{font-size:9px}.hero{padding:34px 8px 25px}.hero h1{font-size:38px;letter-spacing:-1px}.devices,.authgrid{grid-template-columns:1fr}.features{grid-template-columns:1fr}.saved-wrap{padding:15px}.qr-area{align-items:flex-start}.qrbox{width:100px;height:100px}.dialog{padding:16px}.device p{min-height:0}}
-.nav{position:sticky;top:10px;z-index:5}.panel{backdrop-filter:blur(16px)}.saved-card{transition:border-color .2s,transform .2s}.saved-card:hover{border-color:var(--cyan);transform:translateY(-2px)}.hero p{font-size:15px}.features .feature{min-height:84px;display:flex;flex-direction:column;justify-content:center}.auth,.saved-wrap{backdrop-filter:blur(12px)}
-@media(max-width:680px){.nav{position:static}.authbuttons button{flex:1}.saved-actions button{min-width:100px}}
+:root{--bg:#0b1220;--bg2:#0f1a2e;--card:#121e33;--card2:#0d1729;--line:#223149;--line2:#2f4262;--text:#eef3fb;--muted:#93a3bd;--accent:#3ee0cf;--accent-ink:#04201d;--blue:#7b93ff;--ok:#5fdca0;--bad:#ff7b8c;--r:16px;--font:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;background:radial-gradient(900px 480px at 8% -10%,#16385a 0,transparent 60%),radial-gradient(700px 420px at 100% 30%,#1c2150 0,transparent 55%),var(--bg);color:var(--text);font:15px/1.55 var(--font);padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid transparent;border-radius:12px;padding:12px 18px;font-weight:700;background:var(--accent);color:var(--accent-ink);transition:transform .15s,filter .15s,background .15s,border-color .15s}
+button:hover:not(:disabled){filter:brightness(1.08)}
+button:active:not(:disabled){transform:scale(.98)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.secondary{background:#ffffff0a;color:var(--text);border-color:var(--line2)}
+button.secondary:hover:not(:disabled){background:#ffffff14}
+button.danger{background:#ff7b8c1c;color:var(--bad);border-color:#ff7b8c55}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--line2);background:var(--card2);outline:none;transition:border-color .15s,box-shadow .15s}
+input::placeholder{color:#6c7d99}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px #3ee0cf22}
+.hidden{display:none!important}
+.wrap{max-width:1120px;margin:0 auto;padding:20px}
+
+/* top bar */
+.nav{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 16px;background:#0e1829cc;border:1px solid var(--line);border-radius:18px;backdrop-filter:blur(14px);position:sticky;top:12px;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.3px}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--blue));display:grid;place-items:center;color:#06231f}
+.logo svg{width:19px;height:19px}
+.brand i{font-style:normal;color:var(--accent)}
+.secure{font-size:12px;color:var(--ok);font-weight:600;display:flex;align-items:center;gap:7px}
+.secure:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px #5fdca022}
+
+/* sign in */
+.auth{max-width:440px;margin:7vh auto 0;padding:28px;background:linear-gradient(160deg,var(--card),var(--bg2));border:1px solid var(--line);border-radius:22px;box-shadow:0 24px 70px #0007}
+.auth h3{margin:0 0 4px;font-size:24px;letter-spacing:-.5px}
+.auth .lead{margin:0 0 18px;color:var(--muted);font-size:14px}
+.authgrid{display:grid;gap:10px}
+.authbuttons{display:flex;gap:10px;margin-top:14px}
+.authbuttons button{flex:1}
+.status{font-size:13px;color:var(--muted);margin-top:12px;overflow-wrap:anywhere}
+/* signed-in: collapse the auth card into a slim account bar */
+.auth:has(#authGrid.hidden){max-width:none;margin:14px 0 0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-radius:14px;box-shadow:none}
+.auth:has(#authGrid.hidden) h3,.auth:has(#authGrid.hidden) .lead{display:none}
+.auth:has(#authGrid.hidden) .status{margin:0;color:var(--ok)}
+.auth:has(#authGrid.hidden) .authbuttons{margin:0}
+body:has(#authGrid:not(.hidden)) .dash{display:none}
+body:has(#authGrid.hidden) .welcome{display:none}
+.welcome{max-width:440px;margin:22px auto 0;text-align:center;color:var(--muted);font-size:13px}
+
+/* dashboard */
+.dash{margin-top:18px;display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:18px;align-items:start}
+.card{background:linear-gradient(160deg,var(--card),var(--bg2));border:1px solid var(--line);border-radius:20px;padding:22px}
+.card h2{margin:0;font-size:18px;letter-spacing:-.2px}
+.card h2 small{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-top:3px;letter-spacing:0}
+.me-icon{width:52px;height:52px;border-radius:15px;background:#3ee0cf14;border:1px solid #3ee0cf44;display:grid;place-items:center;margin-bottom:14px;font-size:26px}
+.btnstack{display:grid;gap:10px;margin-top:16px}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--bad);color:#2a0710;font-size:12px;font-weight:800;margin-left:6px}
+.steps{list-style:none;margin:22px 0 0;padding:18px 0 0;border-top:1px solid var(--line);display:grid;gap:14px;counter-reset:s}
+.steps li{display:flex;gap:12px;align-items:flex-start;color:var(--muted);font-size:13.5px;counter-increment:s}
+.steps li:before{content:counter(s);flex:none;width:24px;height:24px;border-radius:50%;border:1px solid var(--line2);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--accent)}
+.steps b{color:var(--text);font-weight:600}
+.note{font-size:12px;color:var(--muted);margin-top:16px;line-height:1.5}
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.head button{padding:9px 14px;font-size:13px}
+.saved-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:16px}
+.saved-card{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0;transition:border-color .15s}
+.saved-card:hover{border-color:var(--line2)}
+.saved-card h4{margin:0 0 6px;font-size:15px;overflow-wrap:anywhere}
+.saved-meta{color:var(--muted);font-size:12.5px}
+.online-dot,.offline-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.online-dot{background:var(--ok);box-shadow:0 0 0 3px #5fdca022}
+.offline-dot{background:#6f7e96}
+.saved-actions{display:flex;gap:8px;margin-top:14px}
+.saved-actions button{flex:1;padding:9px 8px;font-size:12.5px}
+.request-empty{padding:16px;border:1px dashed var(--line2);border-radius:14px;color:var(--muted);font-size:13px;grid-column:1/-1}
+
+/* dialogs */
+.overlay{display:none;position:fixed;inset:0;z-index:20;background:#040810d9;backdrop-filter:blur(10px);padding:14px;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.dialog{width:min(100%,560px);max-height:92vh;overflow:auto;background:var(--card);border:1px solid var(--line2);border-radius:22px;padding:22px;box-shadow:0 30px 90px #000a}
+.dialoghead{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.dialoghead h2{margin:0;font-size:20px}
+.close{background:#ffffff0f;color:var(--text);padding:8px 13px;border-color:var(--line2)}
+.tabs{display:flex;gap:4px;margin:16px 0;padding:4px;background:var(--card2);border:1px solid var(--line);border-radius:14px}
+.tabs button{flex:1;background:transparent;color:var(--muted);padding:10px;border-radius:10px}
+.tabs button.active{background:var(--line2);color:var(--text)}
+.panel{background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:18px}
+.panel h3{margin:0 0 4px;font-size:16px}
+.label{display:block;color:var(--muted);font-size:12.5px;font-weight:600;margin:14px 0 6px}
+.full{width:100%;margin-top:12px}
+.qr-area{display:flex;gap:16px;align-items:center;margin-top:16px;padding:14px;background:#3ee0cf0d;border:1px solid #3ee0cf40;border-radius:16px}
+.qrbox{width:122px;height:122px;flex:none;background:#fff;border-radius:12px;display:grid;place-items:center;padding:6px}
+.qrbox img,.qrbox canvas{max-width:100%;max-height:100%}
+.code{font-size:26px;letter-spacing:3px;color:var(--ok);font-weight:800;overflow-wrap:anywhere}
+.message{display:none;padding:12px 14px;margin-top:14px;border-radius:12px;background:#5fdca014;color:#bdf3d6;border:1px solid #5fdca040;font-size:13px;overflow-wrap:anywhere}
+.message.show{display:block}
+.panel-incoming{margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.panel-incoming h4{margin:0 0 4px;font-size:15px}
+.request-card{margin-top:10px;padding:14px;border:1px solid var(--line2);border-radius:14px;background:var(--card)}
+.request-actions{display:flex;gap:8px;margin-top:12px}
+.request-actions button{flex:1}
+.scanner{display:none;margin-top:12px}
+.scanner.show{display:block}
+#reader{width:100%;color:#fff}
+#reader video{border-radius:12px}
+.stage{background:#050a14;border:1px solid var(--line);border-radius:16px;min-height:240px;display:grid;place-items:center;margin-top:14px;overflow:hidden}
+.stage video{width:100%;max-height:62vh;object-fit:contain}
+.stage .ph{padding:28px;text-align:center}
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.chip{padding:12px;border:1px solid var(--line);border-radius:14px;text-align:center;font-size:12.5px;color:var(--muted)}
+.chip b{display:block;color:var(--text);font-size:13px;margin-bottom:2px}
+
+@media(max-width:860px){.dash{grid-template-columns:1fr}}
+@media(max-width:560px){.wrap{padding:12px}.nav{position:static}.secure{display:none}.auth{margin-top:4vh;padding:22px}.qr-area{flex-direction:column;align-items:flex-start}.chips{grid-template-columns:1fr}.dialog{padding:16px}.saved-list{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
-
 <body>
 <div class="wrap">
 
 <header class="nav">
- <div class="brand">MobiPC <span>Connect</span></div>
- <div class="secure">● PRIVATE DEVICE PAIRING</div>
+ <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="2"/><path d="M6 18h6M9 14v4"/><rect x="15" y="9" width="7" height="12" rx="2"/></svg></span>MobiPC <i>Connect</i></div>
+ <div class="secure">Private device pairing</div>
 </header>
-
-<section class="hero">
- <h1>Connect Devices.<br><span>Pair Securely.</span></h1>
- <p>Register devices, send connection requests and approve trusted pairing from one dashboard.</p>
-</section>
 
 <section class="auth">
  <h3 id="authTitle">Account Login</h3>
+ <p class="lead">Sign in to register your phone and PC and pair them securely.</p>
  <div class="authgrid" id="authGrid">
-  <input id="email" type="email" placeholder="Email address">
-  <input id="password" type="password" placeholder="Password (minimum 6 characters)">
+  <input id="email" type="email" placeholder="Email address" autocomplete="email">
+  <input id="password" type="password" placeholder="Password (at least 6 characters)" autocomplete="current-password">
  </div>
  <div class="authbuttons">
-  <button id="signup">Create Account</button>
-  <button id="signin">Sign In</button>
-  <button id="signout" class="secondary hidden">Sign Out</button>
+  <button id="signin">Sign in</button>
+  <button id="signup" class="secondary">Create account</button>
+  <button id="signout" class="secondary hidden">Sign out</button>
  </div>
- <div class="status" id="authStatus">Checking account...</div>
+ <div class="status" id="authStatus">Checking account…</div>
 </section>
+<p class="welcome">Nothing is shared without the device owner's approval. You can stop a session any time.</p>
 
-<section id="incoming" class="incoming hidden"></section>
+<section id="incoming" class="hidden"></section>
 
-<section class="saved-wrap" id="savedWrap">
- <div class="saved-head">
-  <div><h3 class="section-title">MY CONNECTED DEVICES</h3><div class="status">Yahan sirf doosre devices dikhne chahiye jinse pairing approve hui hai. Is device ki apni registrations yahan nahi dikhengi.</div></div>
-  <button class="secondary" id="refreshPairedDevices">↻ REFRESH</button>
- </div>
- <div id="pairedDevices" class="saved-list"><div class="status">Sign in to see connected devices.</div></div>
- <div id="savedMsg" class="status"></div>
-</section>
+<div class="dash">
+ <main>
+  <section class="card">
+   <div class="me-icon">🖥️</div>
+   <h2>This device<small id="detectedDeviceText">Detecting your device…</small></h2>
+   <div class="btnstack">
+    <button id="openThisDevice">Set up this device</button>
+    <button id="openConnect" class="secondary">Connect with a code</button>
+    <button id="openRequests" class="secondary">Pending requests<span id="reqBadge" class="badge hidden">0</span></button>
+   </div>
+   <ol class="steps">
+    <li><span><b>Register this device.</b> You get an 8-character code and a QR code.</span></li>
+    <li><span><b>Enter the other device's code</b> or scan its QR code.</span></li>
+    <li><span><b>Approve on the other device.</b> Nothing starts without the owner's OK.</span></li>
+   </ol>
+   <p class="note">The website handles pairing while it is open. Always-on background access and live control need the native Windows and Android apps.</p>
+  </section>
+ </main>
 
-<main>
- <section class="panel" style="max-width:900px;margin:0 auto 22px;padding:24px;text-align:center">
-  <div style="font-size:38px">🖥️</div>
-  <h2 style="margin:8px 0">This Device</h2>
-  <p class="status" id="detectedDeviceText">Detecting your device automatically…</p>
-  <button id="openThisDevice" class="full" style="max-width:360px">SET UP THIS DEVICE</button>
-  <button id="openConnect" class="secondary full" style="max-width:360px">CONNECT USING DEVICE CODE</button>
+ <section class="card" id="savedWrap">
+  <div class="head">
+   <h2>My connected devices<small>Only your other, approved devices appear here.</small></h2>
+   <button class="secondary" id="refreshPairedDevices">↻ Refresh</button>
+  </div>
+  <div id="pairedDevices" class="saved-list"><div class="request-empty">Sign in to see connected devices.</div></div>
+  <div id="savedMsg" class="status"></div>
  </section>
- <div class="features">
-  <div class="feature"><b>QR / CODE PAIRING</b>Pair your own devices</div>
-  <div class="feature"><b>OWNER APPROVAL</b>Access requires approval</div>
-  <div class="feature"><b>SESSION CONTROL</b>Stop sharing any time</div>
- </div>
- <p class="note" style="text-align:center">This website can manage pairing while it is open. Browser screen capture cannot run continuously in the background or silently after closing the tab. Native Windows and Android apps are required for persistent background connectivity, with visible sharing status and operating-system permissions.</p>
-</main>
+</div>
 </div>
 
 <div class="overlay" id="overlay">
  <div class="dialog">
   <div class="dialoghead">
-   <h2 id="dialogTitle">Device Setup</h2>
-   <button class="close" id="close">✕</button>
+   <h2 id="dialogTitle">Device setup</h2>
+   <button class="close" id="close" aria-label="Close">✕</button>
   </div>
-
   <p class="status" id="dialogSub"></p>
 
   <div class="tabs">
-   <button id="registerTab" class="active">REGISTER DEVICE</button>
-   <button id="connectTab" class="secondary">CONNECT DEVICE</button>
+   <button id="registerTab" class="active">Register device</button>
+   <button id="connectTab">Connect device</button>
   </div>
 
   <section id="registerPanel" class="panel">
-   <h3>Register This Device</h3>
-   <label class="label">DEVICE NAME</label>
+   <h3>Register this device</h3>
+   <label class="label" for="deviceName">Device name</label>
    <input id="deviceName" maxlength="32" placeholder="My Windows PC">
-   <button class="full" id="createCode">SAVE / LOAD THIS DEVICE</button>
-    <button class="secondary full hidden" id="regenerateCode">↻ REGENERATE DEVICE CODE</button>
+   <button class="full" id="createCode">Save this device</button>
+   <button class="secondary full hidden" id="regenerateCode">↻ Generate a new code</button>
 
    <div id="qrResult" class="qr-area hidden">
     <div class="qrbox" id="qrcode"></div>
     <div>
-     <div class="status">YOUR DEVICE CODE</div>
+     <div class="saved-meta">Your device code</div>
      <div class="code" id="codeText">----</div>
-     <button class="secondary full" id="copyCode">COPY CODE</button>
+     <button class="secondary full" id="copyCode">Copy code</button>
     </div>
    </div>
    <div class="message" id="registerMsg"></div>
    <section class="panel-incoming" id="panelIncoming">
-    <h4>📥 Incoming Requests</h4>
-    <div class="saved-meta">Requests for this device will appear here. Keep this page open to receive them.</div>
-    <div id="panelIncomingList" style="margin-top:10px"><div class="request-empty">Open this device panel to check requests.</div></div>
+    <h4>Incoming requests</h4>
+    <div class="saved-meta">Requests for this device show up here while this page is open.</div>
+    <div id="panelIncomingList" style="margin-top:10px"><div class="request-empty">No requests yet.</div></div>
    </section>
   </section>
 
   <section id="connectPanel" class="panel hidden">
-   <h3>Connect To Another Device</h3>
-   <label class="label">DEVICE PAIRING CODE</label>
-   <input id="manualCode" maxlength="9" placeholder="ABCD-1234">
-   <button class="full" id="sendRequest">CONNECT TO DEVICE</button><div class="note">After approval, the remote-screen panel opens automatically. Actual live video and remote input need the WebRTC/native connection module.</div>
-   <button class="secondary full" id="scanButton">▦ SCAN QR CODE</button>
+   <h3>Connect to another device</h3>
+   <label class="label" for="manualCode">Device code</label>
+   <input id="manualCode" maxlength="9" placeholder="ABCD-1234" autocomplete="off" autocapitalize="characters">
+   <button class="full" id="sendRequest">Send connection request</button>
+   <button class="secondary full" id="scanButton">▦ Scan QR code</button>
    <div class="scanner" id="scanner">
     <div id="reader"></div>
-    <button class="secondary full" id="stopScan">STOP SCANNER</button>
+    <button class="secondary full" id="stopScan">Stop scanner</button>
    </div>
    <div class="message" id="connectMsg"></div>
+   <p class="note">After the owner approves, the viewer opens. Live video and remote input need the WebRTC and native modules.</p>
   </section>
 
-  <p class="note">Only approve requests from devices you recognize. Never share your pairing code publicly.</p>
-  <button class="secondary full" id="back">BACK</button>
+  <p class="note">Only approve requests from devices you recognize. Never share your device code publicly.</p>
+  <button class="secondary full" id="back">Back</button>
  </div>
 </div>
 
-<!-- Screen check / permission panel -->
 <div class="overlay" id="screenOverlay" aria-hidden="true">
- <div class="dialog" style="width:min(100%,900px)">
-  <div class="dialoghead">
-   <h2>🖥️ Check Screen</h2>
-   <button class="close" id="screenClose">✕</button>
-  </div>
+ <div class="dialog" style="width:min(100%,880px)">
+  <div class="dialoghead"><h2>Check screen</h2><button class="close" id="screenClose" aria-label="Close">✕</button></div>
   <p class="status" id="screenStatus">Screen sharing is off. Start only when you are ready.</p>
-  <div style="background:#050914;border:1px solid var(--line);border-radius:14px;overflow:hidden;min-height:180px;display:grid;place-items:center;margin-top:14px">
-   <video id="screenPreview" autoplay playsinline muted style="width:100%;max-height:62vh;object-fit:contain"></video>
-   <div id="screenPlaceholder" class="status" style="padding:28px;text-align:center">Screen preview will appear here after you grant permission.</div>
+  <div class="stage">
+   <video id="screenPreview" autoplay playsinline muted></video>
+   <div id="screenPlaceholder" class="ph status">Your screen preview appears here after you grant permission.</div>
   </div>
-  <button id="startScreenShare" class="full">ALLOW & START SCREEN SHARE</button>
-  <button id="stopScreenShare" class="secondary full" disabled>STOP SCREEN SHARING</button>
-  <p class="note">Your browser will ask which screen or window to share. This browser preview is local only. It does not yet stream to the paired device. Live remote viewing and persistent background operation require a completed WebRTC connection and native companion apps.</p>
+  <button id="startScreenShare" class="full">Allow and start screen share</button>
+  <button id="stopScreenShare" class="secondary full" disabled>Stop screen sharing</button>
+  <p class="note">This preview is local only. It does not stream to the paired device yet.</p>
  </div>
 </div>
 
 <div class="overlay" id="remoteViewerOverlay" aria-hidden="true">
- <div class="dialog" style="width:min(100%,1000px)">
-  <div class="dialoghead"><h2>🖥️ Remote Device Screen</h2><button class="close" id="remoteViewerClose">✕</button></div>
+ <div class="dialog" style="width:min(100%,980px)">
+  <div class="dialoghead"><h2>Remote device screen</h2><button class="close" id="remoteViewerClose" aria-label="Close">✕</button></div>
   <p class="status" id="remoteViewerStatus">Pairing approved.</p>
-  <div style="background:#050914;border:1px solid var(--line);border-radius:14px;min-height:260px;display:grid;place-items:center;margin-top:14px;overflow:hidden">
-   <video id="remoteViewerVideo" autoplay playsinline style="width:100%;max-height:65vh;object-fit:contain"></video>
-   <div id="remoteViewerPlaceholder" style="padding:30px;text-align:center"><div style="font-size:42px">🔗</div><b>Device paired successfully</b><p class="status">Live screen appears here after WebRTC screen transport is connected.</p></div>
+  <div class="stage">
+   <video id="remoteViewerVideo" autoplay playsinline></video>
+   <div id="remoteViewerPlaceholder" class="ph"><div style="font-size:40px">🔗</div><b>Device paired</b><p class="status">The live screen appears here once WebRTC streaming is connected.</p></div>
   </div>
-  <div class="features"><div class="feature"><b>SCREEN</b><span id="remoteScreenState">Waiting for WebRTC</span></div><div class="feature"><b>INPUT CONTROL</b>Not connected</div><div class="feature"><b>SESSION</b>Pairing approved</div></div>
-  <p class="note">Important: this HTML currently supports login, device registration and pairing approval only. Live screen video and mouse/keyboard control are not implemented yet.</p>
-  <button class="secondary full" id="remoteViewerDone">CLOSE VIEWER</button>
+  <div class="chips">
+   <div class="chip"><b>Screen</b><span id="remoteScreenState">Waiting for WebRTC</span></div>
+   <div class="chip"><b>Input control</b>Not connected</div>
+   <div class="chip"><b>Session</b>Pairing approved</div>
+  </div>
+  <p class="note">This version covers login, registration and pairing approval. Live video and mouse/keyboard control come next.</p>
+  <button class="secondary full" id="remoteViewerDone">Close viewer</button>
  </div>
 </div>
 
@@ -231,7 +338,7 @@ function showDeviceCode(device) {
  });
  $('qrResult').classList.remove('hidden');
  $('regenerateCode').classList.remove('hidden');
- $('createCode').textContent = 'DEVICE SAVED — CODE LOADED';
+ $('createCode').textContent = 'Device saved';
 }
 
 async function loadSavedDevices() {
@@ -250,7 +357,7 @@ async function loadPairedDevices() {
  }
  const devices = data || [];
  if (!devices.length) {
-  host.innerHTML = '<div class="request-empty">Abhi koi doosra device paired nahi hai. Pehle us device ka code enter karke request bhejo aur us device par ACCEPT karo.</div>';
+  host.innerHTML = '<div class="request-empty">No paired devices yet. Open Connect, enter the other device's code, then accept the request on that device.</div>';
   return;
  }
  host.innerHTML = devices.map(d => {
@@ -264,22 +371,22 @@ async function loadPairedDevices() {
    <h4>${icon} ${escapeHTML(d.peer_device_name || d.device_name || 'Connected device')}</h4>
    <div class="saved-meta">${type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div>
    <div class="saved-actions">
-    <button data-connect-code="${escapeHTML(String(code))}" ${(!online || !code) ? 'disabled' : ''}>CONNECT</button>
-    <button class="danger" data-disconnect-peer="${escapeHTML(String(peerId))}" ${!peerId ? 'disabled' : ''}>DISCONNECT</button>
+    <button data-connect-code="${escapeHTML(String(code))}" ${(!online || !code) ? 'disabled' : ''}>Connect</button>
+    <button class="danger" data-disconnect-peer="${escapeHTML(String(peerId))}" ${!peerId ? 'disabled' : ''}>Disconnect</button>
    </div>
-   ${!code ? '<div class="saved-meta">Connect ke liye get_paired_devices RPC me peer_device_code return karna hoga.</div>' : ''}
+   ${!code ? '<div class="saved-meta">This device has no code, so it cannot be connected from here.</div>' : ''}
   </article>`;
  }).join('');
  host.querySelectorAll('[data-connect-code]').forEach(btn => btn.onclick = async () => {
   if (!btn.disabled) await requestConnection(btn.getAttribute('data-connect-code'), 'savedMsg');
  });
  host.querySelectorAll('[data-disconnect-peer]').forEach(btn => btn.onclick = async () => {
-  if (btn.disabled || !confirm('Is device ki pairing hata dein? Agli baar dobara code dalna padega.')) return;
-  btn.disabled = true; btn.textContent = 'DISCONNECTING...';
+  if (btn.disabled || !confirm('Remove this pairing? You will need to enter the device code again next time.')) return;
+  btn.disabled = true; btn.textContent = 'Disconnecting…';
   const {error: removeError} = await sb.rpc('remove_paired_device', {p_peer_device_id: btn.getAttribute('data-disconnect-peer')});
   if (removeError) {
-   $('savedMsg').textContent = 'Disconnect nahi hua: ' + removeError.message + '. Supabase me remove_paired_device RPC banana hoga.';
-   btn.disabled = false; btn.textContent = 'DISCONNECT';
+   $('savedMsg').textContent = 'Could not disconnect: ' + removeError.message + '. The remove_paired_device function is missing in Supabase.';
+   btn.disabled = false; btn.textContent = 'Disconnect';
    return;
   }
   $('savedMsg').textContent = 'Device disconnected and pairing removed.';
@@ -322,7 +429,7 @@ function openDevice(type) {
  $('deviceName').value = type === 'pc' ? 'MY WINDOWS PC' : 'MY ANDROID PHONE';
  $('qrResult').classList.add('hidden');
  $('regenerateCode').classList.add('hidden');
- $('createCode').textContent = 'SAVE / LOAD THIS DEVICE';
+ $('createCode').textContent = 'Save this device';
  registeredDevice = null;
  overlay.classList.add('open');
  if (session?.user) { loadLocalRegisteredDevice(type); refreshIncomingRequests(); }
@@ -359,6 +466,7 @@ function switchTab(tab) {
 const detectedType = /Android/i.test(navigator.userAgent) ? 'android' : 'pc';
 $('detectedDeviceText').textContent = detectedType === 'android' ? 'Android phone detected. Setup will use this device.' : 'Windows / desktop browser detected. Setup will use this device.';
 $('openThisDevice').onclick = () => openDevice(detectedType);
+$('openRequests').onclick = () => { openDevice(detectedType); switchTab('register'); setTimeout(() => $('panelIncoming').scrollIntoView({behavior:'smooth'}), 150); };
 $('openConnect').onclick = () => { openDevice(detectedType); switchTab('connect'); }; 
 $('close').onclick = closeDialog;
 $('back').onclick = closeDialog;
@@ -674,6 +782,7 @@ async function refreshIncomingRequests() {
   return;
  }
  const owned = (requests || []).filter(req => String(req.device_type || '').toLowerCase() === currentDevice);
+ const rb = $('reqBadge'); if (rb) { rb.textContent = owned.length; rb.classList.toggle('hidden', !owned.length); }
  if (!owned.length) {
   list.innerHTML = '<div class="request-empty">No pending requests for this ' + (currentDevice === 'pc' ? 'PC' : 'Android device') + '.</div>';
   return;
@@ -683,17 +792,17 @@ async function refreshIncomingRequests() {
    '<b>Connection request for ' + escapeHTML(req.device_name) + '</b>' +
    '<div class="saved-meta">' + escapeHTML(req.device_type === 'pc' ? 'Windows PC' : 'Android device') + ' · ' + new Date(req.created_at).toLocaleString() + '</div>' +
    '<div class="request-actions">' +
-    '<button data-approve="' + req.request_id + '">ACCEPT</button>' +
-    '<button class="danger" data-reject="' + req.request_id + '">REJECT</button>' +
+    '<button data-approve="' + req.request_id + '">Accept</button>' +
+    '<button class="danger" data-reject="' + req.request_id + '">Reject</button>' +
    '</div>' +
   '</article>'
  ).join('');
  list.querySelectorAll('[data-approve]').forEach(btn => btn.onclick = async () => {
-  btn.disabled = true; btn.textContent = 'ACCEPTING...';
+  btn.disabled = true; btn.textContent = 'Accepting…';
   await respondRequest(btn.dataset.approve,'approve');
  });
  list.querySelectorAll('[data-reject]').forEach(btn => btn.onclick = async () => {
-  btn.disabled = true; btn.textContent = 'REJECTING...';
+  btn.disabled = true; btn.textContent = 'Rejecting…';
   await respondRequest(btn.dataset.reject,'reject');
  });
 }
