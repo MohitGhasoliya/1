@@ -117,6 +117,11 @@ body:has(#authGrid.hidden) .welcome{display:none}
 .chip{padding:12px;border:1px solid var(--line);border-radius:14px;text-align:center;font-size:12.5px;color:var(--muted)}
 .chip b{display:block;color:var(--text);font-size:13px;margin-bottom:2px}
 
+.sharebar{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:12px;padding:10px 12px 10px 16px;background:#2a0f17;border:1px solid #ff7b8c88;border-radius:16px;box-shadow:0 14px 50px #000a;max-width:calc(100% - 24px)}
+.sharebar span{font-weight:700;font-size:13.5px}
+.sharebar .rec{width:9px;height:9px;flex:none;border-radius:50%;background:var(--bad);animation:pulse 1.4s infinite}
+.sharebar button{padding:8px 12px;font-size:13px;white-space:nowrap}
+@keyframes pulse{50%{opacity:.25}}
 @media(max-width:860px){.dash{grid-template-columns:1fr}}
 @media(max-width:560px){.wrap{padding:12px}.nav{position:static}.secure{display:none}.auth{margin-top:4vh;padding:22px}.qr-area{flex-direction:column;align-items:flex-start}.chips{grid-template-columns:1fr}.dialog{padding:16px}.saved-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
@@ -225,7 +230,7 @@ body:has(#authGrid.hidden) .welcome{display:none}
     <button class="secondary full" id="stopScan">Stop scanner</button>
    </div>
    <div class="message" id="connectMsg"></div>
-   <p class="note">After the owner approves, the viewer opens. Live video and remote input need the WebRTC and native modules.</p>
+   <p class="note">After the owner approves and allows screen sharing, their live screen opens here. Remote mouse and keyboard need the native apps.</p>
   </section>
 
   <p class="note">Only approve requests from devices you recognize. Never share your device code publicly.</p>
@@ -252,19 +257,21 @@ body:has(#authGrid.hidden) .welcome{display:none}
   <div class="dialoghead"><h2>Remote device screen</h2><button class="close" id="remoteViewerClose" aria-label="Close">✕</button></div>
   <p class="status" id="remoteViewerStatus">Pairing approved.</p>
   <div class="stage">
-   <video id="remoteViewerVideo" autoplay playsinline></video>
-   <div id="remoteViewerPlaceholder" class="ph"><div style="font-size:40px">🔗</div><b>Device paired</b><p class="status">The live screen appears here once WebRTC streaming is connected.</p></div>
+   <video id="remoteViewerVideo" autoplay playsinline muted></video>
+   <div id="remoteViewerPlaceholder" class="ph"><div style="font-size:40px">🔗</div><b>Device paired</b><p class="status">The live screen appears here once the other device allows screen sharing.</p></div>
   </div>
   <div class="chips">
    <div class="chip"><b>Screen</b><span id="remoteScreenState">Waiting for WebRTC</span></div>
    <div class="chip"><b>Input control</b>Not connected</div>
    <div class="chip"><b>Session</b>Pairing approved</div>
   </div>
-  <p class="note">This version covers login, registration and pairing approval. Live video and mouse/keyboard control come next.</p>
+  <p class="note">Live view works when the other device shares its screen from a desktop browser and the owner allows it. Mouse and keyboard control need the native apps.</p>
+  <button class="full" id="remoteFullscreen">⛶ Full screen</button>
   <button class="secondary full" id="remoteViewerDone">Close viewer</button>
  </div>
 </div>
 
+<div class="sharebar hidden" id="shareBar" role="status"><i class="rec"></i><span id="shareBarText">Your screen is being shared</span><button class="danger" id="shareBarStop">Stop sharing</button></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -355,9 +362,10 @@ async function loadPairedDevices() {
   host.innerHTML = '<div class="request-empty">Could not load connected devices: ' + escapeHTML(error.message) + '<br>Supabase get_paired_devices function needs to return peer_device_id, peer_device_name, peer_device_type, peer_last_seen_at and peer_device_code.</div>';
   return;
  }
- const devices = data || [];
+ const mine = ['pc','android'].map(t => localStorage.getItem(localDeviceKey(t))).filter(Boolean);
+ const devices = (data || []).filter(d => !mine.includes(String(d.peer_device_id)));
  if (!devices.length) {
-  host.innerHTML = '<div class="request-empty">No paired devices yet. Open Connect, enter the other device's code, then accept the request on that device.</div>';
+  host.innerHTML = '<div class="request-empty">No paired devices yet. Open Connect, enter the code of the other device, then accept the request on that device.</div>';
   return;
  }
  host.innerHTML = devices.map(d => {
@@ -692,7 +700,7 @@ async function requestConnection(rawCode, messageTarget = 'connectMsg') {
   localStorage.setItem(localDeviceKey(currentDevice), requesterDeviceId);
  }
  showMessage(messageTarget,'Checking device code and sending request...');
- const {data,error} = await sb.rpc('request_device_connection',{p_device_code:clean});
+ const {data,error} = await sb.rpc('request_device_connection',{p_device_code:clean,p_requester_device_id:requesterDeviceId});
  if (error) {
   const msg = error.message || 'Unknown error';
   if (/device code not found/i.test(msg)) {
@@ -792,7 +800,7 @@ async function refreshIncomingRequests() {
    '<b>Connection request for ' + escapeHTML(req.device_name) + '</b>' +
    '<div class="saved-meta">' + escapeHTML(req.device_type === 'pc' ? 'Windows PC' : 'Android device') + ' · ' + new Date(req.created_at).toLocaleString() + '</div>' +
    '<div class="request-actions">' +
-    '<button data-approve="' + req.request_id + '">Accept</button>' +
+    '<button data-approve="' + req.request_id + '">' + (navigator.mediaDevices?.getDisplayMedia ? 'Accept &amp; share screen' : 'Accept') + '</button>' +
     '<button class="danger" data-reject="' + req.request_id + '">Reject</button>' +
    '</div>' +
   '</article>'
@@ -819,12 +827,14 @@ function openRemoteViewer() {
  const viewer = $('remoteViewerOverlay');
  viewer.classList.add('open');
  viewer.setAttribute('aria-hidden','false');
- $('remoteViewerStatus').textContent = 'Pairing approved. This HTML build still needs WebRTC signaling and a screen-sharing sender to display the other device.';
+ $('remoteViewerStatus').textContent = 'Approved. Waiting for the owner to allow screen sharing…';
  $('remoteScreenState').textContent = 'Waiting for WebRTC';
  $('remoteViewerPlaceholder').classList.remove('hidden');
  $('remoteViewerVideo').srcObject = null;
+ startViewer(currentOutgoingRequestId).catch(e => { $('remoteViewerStatus').textContent = 'Could not start the live view: ' + (e?.message || e); });
 }
 function closeRemoteViewer() {
+ if (rtc && rtc.role === 'viewer') stopRtc(true);
  $('remoteViewerOverlay').classList.remove('open');
  $('remoteViewerOverlay').setAttribute('aria-hidden','true');
 }
@@ -841,7 +851,7 @@ async function refreshOutgoingStatus() {
  if (error || !data) return;
  const status = String(data.status || 'pending').toLowerCase();
  const message = status === 'approved'
-  ? '✓ Request approved. Opening viewer; live screen transport must be configured.'
+  ? '✓ Request approved. Opening the live viewer…'
   : status === 'rejected'
    ? 'REJECTED: The device owner rejected the connection request.'
    : status === 'expired'
@@ -923,23 +933,152 @@ function escapeHTML(value) {
  }[c]));
 }
 
-async function respondRequest(id,decision) {
- const result = await sb.rpc('respond_device_connection',{
-  p_request_id:id,
-  p_decision:decision
+// ===== Live screen via WebRTC (signaling = Supabase Realtime broadcast) =====
+const RTC_CFG = {iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}]};
+let rtc = null;
+let approving = false;
+
+function rtcChannel(id, onMsg) {
+ return new Promise((resolve, reject) => {
+  const ch = sb.channel('rtc-' + id, {config:{broadcast:{self:false}}});
+  ['offer','answer','bye'].forEach(ev => ch.on('broadcast',{event:ev}, m => onMsg(ev, m.payload || {})));
+  const t = setTimeout(() => reject(new Error('Realtime signaling timed out')), 10000);
+  ch.subscribe(st => {
+   if (st === 'SUBSCRIBED') { clearTimeout(t); resolve(ch); }
+   else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') { clearTimeout(t); reject(new Error('Realtime signaling error: ' + st)); }
+  });
  });
+}
+function rtcSend(ev, payload) { try { rtc?.ch?.send({type:'broadcast', event:ev, payload:payload || {}}); } catch (e) {} }
+function iceDone(pc) {
+ return new Promise(resolve => {
+  if (pc.iceGatheringState === 'complete') return resolve();
+  const check = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', check); resolve(); } };
+  pc.addEventListener('icegatheringstatechange', check);
+  setTimeout(resolve, 3500);
+ });
+}
+function showShareBar(text) { $('shareBarText').textContent = text; $('shareBar').classList.remove('hidden'); }
+function stopRtc(notify) {
+ if (!rtc) return;
+ const r = rtc; rtc = null;
+ clearInterval(r.timer);
+ if (notify && r.ch) { try { r.ch.send({type:'broadcast', event:'bye', payload:{}}); } catch (e) {} }
+ if (r.stream) r.stream.getTracks().forEach(t => t.stop());
+ try { r.pc.close(); } catch (e) {}
+ if (r.ch) setTimeout(() => sb.removeChannel(r.ch), 400);
+ if (r.role === 'sharer') $('shareBar').classList.add('hidden');
+}
+$('shareBarStop').onclick = () => { stopRtc(true); showMessage('registerMsg','Screen sharing stopped.'); };
+$('remoteFullscreen').onclick = () => { const v = $('remoteViewerVideo'); (v.requestFullscreen || v.webkitRequestFullscreen || function(){}).call(v); };
 
- if (result.error) {
-  $('incoming').textContent = 'Could not update request: '+result.error.message;
-  return;
+async function startSharer(id, stream) {
+ stopRtc(false);
+ const pc = new RTCPeerConnection(RTC_CFG);
+ const r = rtc = {role:'sharer', id, pc, stream};
+ stream.getTracks().forEach(t => pc.addTrack(t, stream));
+ const vt = stream.getVideoTracks()[0];
+ if (vt) vt.onended = () => { if (rtc === r) { stopRtc(true); showMessage('registerMsg','Screen sharing stopped.'); } };
+ pc.onconnectionstatechange = () => {
+  if (rtc !== r) return;
+  if (pc.connectionState === 'connected') showShareBar('Your screen is being shared');
+  if (pc.connectionState === 'failed') showShareBar('Connection failed. Your network may block direct links (a TURN server is needed).');
+ };
+ r.ch = await rtcChannel(id, async (ev, p) => {
+  if (rtc !== r) return;
+  if (ev === 'offer') {
+   if (r.busy) return;
+   r.busy = true;
+   try {
+    await pc.setRemoteDescription(p.sdp);
+    await pc.setLocalDescription(await pc.createAnswer());
+    await iceDone(pc);
+    rtcSend('answer', {sdp: pc.localDescription});
+   } catch (e) { showMessage('registerMsg','Live connection error: ' + (e?.message || e)); }
+  } else if (ev === 'bye') {
+   stopRtc(false);
+   showMessage('registerMsg','The other device ended the session.');
+  }
+ });
+ showShareBar('Screen sharing is on. Waiting for the other device…');
+}
+
+async function startViewer(id) {
+ stopRtc(false);
+ const pc = new RTCPeerConnection(RTC_CFG);
+ const r = rtc = {role:'viewer', id, pc};
+ pc.addTransceiver('video', {direction:'recvonly'});
+ pc.ontrack = e => {
+  if (rtc !== r) return;
+  const v = $('remoteViewerVideo');
+  v.srcObject = e.streams[0] || new MediaStream([e.track]);
+  if (v.play) v.play().catch(() => {});
+  $('remoteViewerPlaceholder').classList.add('hidden');
+  $('remoteViewerStatus').textContent = 'Live: you are viewing the other device\'s screen.';
+  $('remoteScreenState').textContent = 'Live';
+ };
+ pc.onconnectionstatechange = () => {
+  if (rtc !== r) return;
+  if (pc.connectionState === 'failed') {
+   $('remoteViewerStatus').textContent = 'Connection failed. Your network may block direct links (a TURN server is needed).';
+   $('remoteScreenState').textContent = 'Failed';
+  }
+ };
+ $('remoteScreenState').textContent = 'Connecting…';
+ r.ch = await rtcChannel(id, async (ev, p) => {
+  if (rtc !== r) return;
+  if (ev === 'answer' && !pc.remoteDescription) {
+   clearInterval(r.timer);
+   try { await pc.setRemoteDescription(p.sdp); }
+   catch (e) { $('remoteViewerStatus').textContent = 'Live connection error: ' + (e?.message || e); }
+  } else if (ev === 'bye') {
+   stopRtc(false);
+   $('remoteViewerVideo').srcObject = null;
+   $('remoteViewerPlaceholder').classList.remove('hidden');
+   $('remoteViewerStatus').textContent = 'The device owner stopped sharing.';
+   $('remoteScreenState').textContent = 'Stopped';
+  }
+ });
+ await pc.setLocalDescription(await pc.createOffer());
+ await iceDone(pc);
+ if (rtc !== r) return;
+ let tries = 0;
+ const send = () => {
+  if (pc.remoteDescription) return;
+  rtcSend('offer', {sdp: pc.localDescription});
+  if (++tries === 7) $('remoteViewerStatus').textContent = 'No screen received yet. The owner may not have allowed sharing, or that device\'s browser cannot share its screen (phones need the Android app).';
+ };
+ send();
+ r.timer = setInterval(send, 3000);
+}
+
+async function respondRequest(id,decision) {
+ if (approving) return;
+ approving = true;
+ try {
+  let started = false;
+  if (decision === 'approve' && navigator.mediaDevices?.getDisplayMedia) {
+   let stream;
+   try { stream = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}}, audio:false}); }
+   catch (e) { showMessage('registerMsg','Screen sharing was not allowed, so the request is still pending. Press Accept again when you are ready.'); return; }
+   try { await startSharer(id, stream); started = true; }
+   catch (e) { stream.getTracks().forEach(t => t.stop()); showMessage('registerMsg','Could not start the live connection: ' + (e?.message || e)); return; }
+  }
+  const result = await sb.rpc('respond_device_connection',{p_request_id:id, p_decision:decision});
+  if (result.error) {
+   stopRtc(false);
+   showMessage('registerMsg','Could not update request: ' + result.error.message);
+   return;
+  }
+  showMessage('registerMsg', decision === 'approve'
+   ? (started ? 'Accepted. Your screen is being shared. Use Stop sharing any time.' : 'Accepted. This browser cannot share a screen, so only pairing is active. Use a desktop browser or the native app to share.')
+   : 'Connection request rejected.');
+  await refreshOutgoingStatus();
+  loadSavedDevices();
+ } finally {
+  approving = false;
+  refreshIncomingRequests();
  }
-
- showMessage('registerMsg', decision === 'approve'
-  ? 'Request accepted. The requesting device will see APPROVED. Remote screen viewing is not active yet.'
-  : 'Connection request rejected.');
- await refreshIncomingRequests();
- await refreshOutgoingStatus();
- loadSavedDevices();
 }
 
 initSupabase().catch(error => setStatus('Startup error: ' + (error?.message || error)));
