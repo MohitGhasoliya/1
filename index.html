@@ -149,7 +149,9 @@ body:has(#authGrid.hidden) .welcome{display:none}
 .rv-stage .ph{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;pointer-events:none}
 #vcDot{position:fixed;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:2px solid var(--accent);background:#3ee0cf44;pointer-events:none;opacity:0;transition:opacity .25s;z-index:60}
 .rv .vctools{margin:0;padding:10px 12px;background:var(--card);border-top:1px solid var(--line);grid-template-columns:repeat(5,1fr)}
-@media(max-width:560px){.rv .vctools button{font-size:11px;padding:9px 2px}}
+.rv .vctools{display:flex;overflow-x:auto;gap:8px;-webkit-overflow-scrolling:touch}
+.rv .vctools button{flex:0 0 auto;min-width:92px;padding:12px 14px;font-size:13px}
+@media(max-height:480px){.rv-head{padding:6px 10px}.rv-title .saved-meta{display:none}.rv .vctools{padding:6px 10px}.rv .vctools button{padding:8px 12px}}
 @media(max-width:860px){.dash{grid-template-columns:1fr}}
 @media(max-width:560px){.wrap{padding:12px}.nav{position:static}.secure{display:none}.auth{margin-top:4vh;padding:22px}.qr-area{flex-direction:column;align-items:flex-start}.chips{grid-template-columns:1fr}.dialog{padding:16px}.saved-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
@@ -302,9 +304,12 @@ body:has(#authGrid.hidden) .welcome{display:none}
   </div>
   <div class="vctools hidden" id="vcTools">
    <button class="secondary" id="vcKeyboard">⌨ Keyboard</button>
+   <button class="secondary" id="vcMode">Mode: Direct</button>
    <button class="secondary" id="vcRight">Right-click: off</button>
    <button class="secondary" id="vcDrag">Drag mode: off</button>
    <button class="secondary" id="vcEsc">Esc</button>
+   <button class="secondary" id="vcTab">Tab</button>
+   <button class="secondary" id="vcAlt">Alt+Tab</button>
    <button class="secondary" id="vcWin">Win</button>
   </div>
   <input id="vcKb" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Remote keyboard input">
@@ -1009,7 +1014,7 @@ function escapeHTML(value) {
 const RTC_CFG = {iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}]};
 let rtc = null;
 let approving = false;
-const hosting = {stream:null, wantCtl:false, peerName:''};
+const hosting = {stream:null, wantCtl:false, peerName:'', agentSource:false, starting:false};
 
 function rtcChannel(id, onMsg) {
  return new Promise((resolve, reject) => {
@@ -1051,7 +1056,7 @@ function stopRtc(notify) {
   viewerControl(false); renderPaired();
  }
 }
-$('shareBarStop').onclick = () => { if (hosting.stream) stopHosting(true); else { stopRtc(true); showMessage('registerMsg','Screen sharing stopped.'); } };
+$('shareBarStop').onclick = () => { if (hosting.stream) manualStopHosting(); else { stopRtc(true); showMessage('registerMsg','Screen sharing stopped.'); } };
 $('shareEnd').onclick = () => { stopRtc(true); showMessage('registerMsg','Session ended. Still hosting.'); };
 $('remoteFullscreen').onclick = () => { const v = $('remoteViewerVideo'); (v.requestFullscreen || v.webkitRequestFullscreen || function(){}).call(v); };
 
@@ -1145,21 +1150,28 @@ async function startViewer(id) {
 }
 
 // ===== Remote control (viewer -> data channel -> owner page -> local MobiPC Agent) =====
-const ctl = {ws:null, allowed:false};
-const vctl = {on:false, drag:false};
+const ctl = {ws:null, allowed:false, onframe:null};
+const vctl = {on:false, drag:false, pad:false, cur:{x:0.5, y:0.5}};
 function agentConnect(token) {
  return new Promise((resolve, reject) => {
   let ws; try { ws = new WebSocket('ws://127.0.0.1:8765'); } catch (e) { return reject(e); }
+  ws.binaryType = 'arraybuffer';
   const t = setTimeout(() => { try { ws.close(); } catch (e) {} reject(new Error('timeout')); }, 5000);
   ws.onopen = () => ws.send(JSON.stringify({token}));
-  ws.onmessage = e => { if (e.data === 'ok') { clearTimeout(t); ctl.ws = ws; resolve(); } };
-  ws.onclose = () => { clearTimeout(t); if (ctl.ws === ws) { ctl.ws = null; if (ctl.allowed) setControl(false); } reject(new Error('closed')); };
+  ws.onmessage = e => {
+   if (typeof e.data === 'string') { if (e.data === 'ok') { clearTimeout(t); ctl.ws = ws; resolve(); } }
+   else if (ctl.onframe) ctl.onframe(e.data);
+  };
+  ws.onclose = () => {
+   clearTimeout(t);
+   if (ctl.ws === ws) { ctl.ws = null; if (hosting.agentSource) stopHosting(true); else if (ctl.allowed) setControl(false); }
+   reject(new Error('closed'));
+  };
  });
 }
 function setControl(on) {
  ctl.allowed = on;
  $('shareCtl').textContent = on ? 'Control ON · tap to stop' : 'Allow control';
- if (!on && ctl.ws) { try { ctl.ws.close(); } catch (e) {} ctl.ws = null; }
  const dc = rtc && rtc.dc;
  if (dc && dc.readyState === 'open') dc.send(JSON.stringify({t:'ctlstate', on}));
 }
@@ -1169,14 +1181,15 @@ $('shareCtl').onclick = async () => {
  if (ctl.allowed) { setControl(false); hosting.wantCtl = false; syncBar(); return; }
  const st = stm.getVideoTracks()[0]?.getSettings?.() || {};
  if (st.displaySurface && st.displaySurface !== 'monitor') { showShareBar('Control needs "Entire screen". Stop sharing and share again, choosing Entire screen.'); return; }
- if (await tryAgent(true)) { hosting.wantCtl = true; return; }
+ if (await tryAgent(true)) { hosting.wantCtl = true; setControl(true); syncBar(); return; }
  showShareBar('Could not reach the MobiPC Agent. Start it on this PC and check the token.');
 };
 async function tryAgent(prompting) {
+ if (ctl.ws && ctl.ws.readyState === 1) return true;
  let token = localStorage.getItem('mobipc_agent_token');
- if (!token && prompting) token = (prompt('Enter the token shown by the MobiPC Agent on this PC:') || '').trim();
+ if (!token && prompting) token = (prompt('Enter the token shown in the MobiPC Agent window on this PC.\nLeave it empty to use the browser screen picker instead:') || '').trim();
  if (!token) return false;
- try { await agentConnect(token); localStorage.setItem('mobipc_agent_token', token); setControl(true); syncBar(); return true; }
+ try { await agentConnect(token); localStorage.setItem('mobipc_agent_token', token); return true; }
  catch (e) { return false; }
 }
 function syncBar() {
@@ -1199,43 +1212,92 @@ function renderHost() {
  $('hostTitle').textContent = !can ? 'This browser cannot share its screen' : on ? (sharing ? 'Connected' : 'Ready for connections') : 'Not hosting';
  $('hostSub').textContent = !can ? 'Android browsers cannot share the screen. To view a phone from a PC, the MobiPC Android app is needed.'
   : on ? (sharing ? (hosting.peerName || 'A device') + ' is viewing your screen.' : 'Trusted devices connect instantly. A new device needs your OK once.')
-  : 'Share your screen once. Trusted devices then connect instantly, with no repeated popups.';
+  : 'Start once. With the MobiPC Agent running, no screen picker or popup is needed again, and hosting restarts by itself.';
 }
-async function startHosting() {
- if (!navigator.mediaDevices?.getDisplayMedia || hosting.stream) return;
- if (!session?.user) { $('hostSub').textContent = 'Please sign in first.'; return; }
- let stream;
- try { stream = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}}, audio:false}); }
- catch (e) { $('hostSub').textContent = 'Screen sharing was not allowed. Press Start hosting when you are ready.'; return; }
- hosting.stream = stream;
- hosting.wantCtl = $('hostCtl').checked;
- localStorage.setItem('mobipc_host_ctl', hosting.wantCtl ? '1' : '0');
- stream.getVideoTracks()[0].onended = () => stopHosting(true);
- syncBar(); renderHost();
- if (hosting.wantCtl) {
-  const st = stream.getVideoTracks()[0].getSettings?.() || {};
-  if (st.displaySurface && st.displaySurface !== 'monitor') $('hostSub').textContent = 'Control needs "Entire screen". Hosting is view-only. Stop and choose Entire screen to allow control.';
-  else if (!(await tryAgent(true))) $('hostSub').textContent = 'MobiPC Agent not reachable. Hosting is view-only until you start the agent.';
- }
- refreshIncomingRequests();
+function agentScreen() {
+ return new Promise((resolve, reject) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280; canvas.height = 720;
+  canvas.style.cssText = 'position:fixed;left:-9999px;top:0;width:2px;height:2px';
+  document.body.appendChild(canvas);
+  const g = canvas.getContext('2d');
+  const stream = canvas.captureStream(15);
+  let got = false;
+  const timer = setTimeout(() => {
+   if (got) return;
+   ctl.onframe = null; canvas.remove();
+   try { ctl.ws.send(JSON.stringify({t:'screen', on:false})); } catch (e) {}
+   reject(new Error('no frames received'));
+  }, 6000);
+  ctl.onframe = async buf => {
+   try {
+    const bmp = await createImageBitmap(new Blob([buf], {type:'image/jpeg'}));
+    if (canvas.width !== bmp.width || canvas.height !== bmp.height) { canvas.width = bmp.width; canvas.height = bmp.height; }
+    g.drawImage(bmp, 0, 0); bmp.close();
+    if (!got) { got = true; clearTimeout(timer); stream._canvas = canvas; resolve(stream); }
+   } catch (e) {}
+  };
+  ctl.ws.send(JSON.stringify({t:'screen', on:true, fps:15, w:1280, q:60}));
+ });
+}
+async function startHosting(silent) {
+ if (hosting.stream || hosting.starting) return;
+ if (!session?.user) { if (!silent) $('hostSub').textContent = 'Please sign in first.'; return; }
+ hosting.starting = true;
+ try {
+  let stream = null, viaAgent = false;
+  if (await tryAgent(!silent)) {
+   try { stream = await agentScreen(); viaAgent = true; }
+   catch (e) { if (!silent) $('hostSub').textContent = 'The agent did not send the screen (' + e.message + ').'; }
+  }
+  if (!stream && !silent && navigator.mediaDevices?.getDisplayMedia) {
+   try { stream = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}}, audio:false}); }
+   catch (e) { $('hostSub').textContent = 'Screen sharing was not allowed. Press Start hosting when you are ready.'; return; }
+  }
+  if (!stream) return;
+  hosting.stream = stream; hosting.agentSource = viaAgent;
+  hosting.wantCtl = $('hostCtl').checked;
+  localStorage.setItem('mobipc_host_ctl', hosting.wantCtl ? '1' : '0');
+  if (!silent) localStorage.setItem('mobipc_autohost', '1');
+  stream.getVideoTracks()[0].onended = () => stopHosting(true);
+  syncBar(); renderHost();
+  if (hosting.wantCtl && viaAgent) setControl(true);
+  else if (hosting.wantCtl) $('hostSub').textContent = 'Hosting is view-only. Start the MobiPC Agent to allow control.';
+  refreshIncomingRequests();
+ } finally { hosting.starting = false; }
 }
 function stopHosting(notify) {
  if (rtc && rtc.role === 'sharer') stopRtc(notify);
- if (hosting.stream) { hosting.stream.getTracks().forEach(t => t.stop()); hosting.stream = null; }
+ if (hosting.stream) { hosting.stream.getTracks().forEach(t => t.stop()); if (hosting.stream._canvas) hosting.stream._canvas.remove(); hosting.stream = null; }
+ if (hosting.agentSource) { ctl.onframe = null; try { if (ctl.ws) ctl.ws.send(JSON.stringify({t:'screen', on:false})); } catch (e) {} }
+ hosting.agentSource = false;
  setControl(false); syncBar(); renderHost();
 }
-$('hostStart').onclick = startHosting;
-$('hostStop').onclick = () => stopHosting(true);
+function manualStopHosting() {
+ localStorage.setItem('mobipc_autohost', '0');
+ stopHosting(true);
+ try { if (ctl.ws) ctl.ws.close(); } catch (e) {}
+}
+$('hostStart').onclick = () => startHosting(false);
+$('hostStop').onclick = manualStopHosting;
+// after the first manual start, hosting restarts by itself whenever the agent is running
+setInterval(() => {
+ if (hosting.stream || hosting.starting || approving || !session?.user) return;
+ if (/Android/i.test(navigator.userAgent) || localStorage.getItem('mobipc_autohost') !== '1') return;
+ if (!localStorage.getItem('mobipc_agent_token') || !localStorage.getItem(localDeviceKey('pc'))) return;
+ startHosting(true);
+}, 6000);
 $('hostCtl').checked = localStorage.getItem('mobipc_host_ctl') !== '0';
 renderHost();
 
 function viewerControl(on) {
- vctl.on = on; vctl.drag = false; vctl.rightOnce = false;
+ vctl.on = on; vctl.drag = false; vctl.rightOnce = false; vctl.pad = false; vctl.cur = {x:0.5, y:0.5};
  $('vcDrag').textContent = 'Drag mode: off';
  $('vcRight').textContent = 'Right-click: off';
+ $('vcMode').textContent = 'Mode: Direct';
  $('vcTools').classList.toggle('hidden', !on);
  $('vcState').textContent = on ? 'On' : 'Off';
- if (on) $('remoteViewerStatus').textContent = 'Tap = click · hold = right click · two fingers = scroll';
+ if (on) $('remoteViewerStatus').textContent = 'Tap = click · hold = right click · two fingers = scroll · two-finger tap = right click';
 }
 function ctlSend(o) {
  const dc = rtc && rtc.role === 'viewer' && rtc.dc;
@@ -1266,34 +1328,43 @@ function vpt(cx, cy) {
   e.preventDefault();
   ctlSend({t:'key', k:e.key, c:e.ctrlKey, a:e.altKey, s:e.shiftKey, m:e.metaKey});
  });
- // touch (phone viewer): tap = click, hold = right click, 2 fingers = scroll, drag mode = hold + move
+ // touch: Direct mode (finger = pointer) or Touchpad mode (finger moves the pointer slowly)
+ const vsize = () => { const r = vid.getBoundingClientRect(); const k = vid.videoWidth ? Math.min(r.width / vid.videoWidth, r.height / vid.videoHeight) : 1; return {w:(vid.videoWidth || r.width) * k, h:(vid.videoHeight || r.height) * k}; };
  vid.addEventListener('touchstart', e => {
   if (!vctl.on) return;
   e.preventDefault();
   const t = e.touches;
-  if (t.length >= 2) { if (tch) clearTimeout(tch.lp); tch = {scroll:true, y:(t[0].clientY + t[1].clientY) / 2}; return; }
-  const p = vpt(t[0].clientX, t[0].clientY);
-  if (!p) { tch = null; return; }
-  tch = {x0:t[0].clientX, y0:t[0].clientY, moved:false, long:false, t0:Date.now(), last:p};
-  showDot(t[0].clientX, t[0].clientY);
-  ctlSend({t:'move', ...p});
-  if (vctl.drag) ctlSend({t:'down', b:0, ...p});
-  else tch.lp = setTimeout(() => { if (tch && !tch.moved && !tch.scroll) { tch.long = true; ctlSend({t:'click', b:2, ...tch.last}); } }, 500);
+  if (t.length >= 2) { if (tch) clearTimeout(tch.lp); tch = {scroll:true, moved:false, t0:Date.now(), y:(t[0].clientY + t[1].clientY) / 2}; return; }
+  const x = t[0].clientX, y = t[0].clientY;
+  let p;
+  if (vctl.pad) p = vctl.cur;
+  else { p = vpt(x, y); if (!p) { tch = null; return; } vctl.cur = p; }
+  tch = {x0:x, y0:y, px:x, py:y, moved:false, long:false, t0:Date.now(), last:p};
+  showDot(x, y);
+  if (!vctl.pad) ctlSend({t:'move', ...p});
+  if (vctl.drag) ctlSend({t:'down', b:0, ...vctl.cur});
+  else tch.lp = setTimeout(() => { if (tch && !tch.moved && !tch.scroll) { tch.long = true; ctlSend({t:'click', b:2, ...vctl.cur}); } }, 500);
  }, {passive:false});
  vid.addEventListener('touchmove', e => {
   if (!vctl.on || !tch) return;
   e.preventDefault();
   const t = e.touches;
-  if (tch.scroll && t.length >= 2) {
-   const mid = (t[0].clientY + t[1].clientY) / 2, d = mid - tch.y;
-   if (Math.abs(d) > 6) { ctlSend({t:'wheel', dy:-d * 2}); tch.y = mid; }
+  if (tch.scroll) {
+   if (t.length >= 2) { const mid = (t[0].clientY + t[1].clientY) / 2, d = mid - tch.y; if (Math.abs(d) > 6) { tch.moved = true; ctlSend({t:'wheel', dy:-d * 2}); tch.y = mid; } }
    return;
   }
-  if (tch.scroll) return;
-  if (Math.hypot(t[0].clientX - tch.x0, t[0].clientY - tch.y0) > 10) { tch.moved = true; clearTimeout(tch.lp); }
-  const p = vpt(t[0].clientX, t[0].clientY);
-  showDot(t[0].clientX, t[0].clientY);
-  if (p) { tch.last = p; if (tch.moved && throttled()) ctlSend({t:'move', ...p}); }
+  const x = t[0].clientX, y = t[0].clientY;
+  if (Math.hypot(x - tch.x0, y - tch.y0) > 10) { tch.moved = true; clearTimeout(tch.lp); }
+  showDot(x, y);
+  if (vctl.pad) {
+   const sz = vsize(), gain = 1.6;
+   vctl.cur = {x:Math.min(1, Math.max(0, vctl.cur.x + (x - tch.px) * gain / sz.w)), y:Math.min(1, Math.max(0, vctl.cur.y + (y - tch.py) * gain / sz.h))};
+   tch.px = x; tch.py = y; tch.last = vctl.cur;
+   if (tch.moved && throttled()) ctlSend({t:'move', ...vctl.cur});
+  } else {
+   const p = vpt(x, y);
+   if (p) { tch.last = p; vctl.cur = p; if (tch.moved && throttled()) ctlSend({t:'move', ...p}); }
+  }
  }, {passive:false});
  vid.addEventListener('touchend', e => {
   if (!vctl.on) return;
@@ -1301,12 +1372,17 @@ function vpt(cx, cy) {
   if (e.touches.length > 0 || !tch) return;
   clearTimeout(tch.lp);
   setTimeout(() => { dot.style.opacity = 0; }, 250);
-  if (!tch.scroll) {
-   if (vctl.drag) ctlSend({t:'up', b:0, ...tch.last});
-   else if (!tch.moved && !tch.long && Date.now() - tch.t0 < 500) { ctlSend({t:'click', b:vctl.rightOnce ? 2 : 0, ...tch.last}); if (vctl.rightOnce) { vctl.rightOnce = false; $('vcRight').textContent = 'Right-click: off'; } }
+  if (tch.scroll) { if (!tch.moved && Date.now() - tch.t0 < 350) ctlSend({t:'click', b:2, ...vctl.cur}); }
+  else if (vctl.drag) ctlSend({t:'up', b:0, ...vctl.cur});
+  else if (!tch.moved && !tch.long && Date.now() - tch.t0 < 500) {
+   ctlSend({t:'click', b:vctl.rightOnce ? 2 : 0, ...vctl.cur});
+   if (vctl.rightOnce) { vctl.rightOnce = false; $('vcRight').textContent = 'Right-click: off'; }
   }
   tch = null;
  }, {passive:false});
+ $('vcMode').onclick = () => { vctl.pad = !vctl.pad; $('vcMode').textContent = 'Mode: ' + (vctl.pad ? 'Touchpad' : 'Direct'); };
+ $('vcTab').onclick = () => ctlSend({t:'key', k:'Tab'});
+ $('vcAlt').onclick = () => ctlSend({t:'key', k:'Tab', a:true});
  // phone keyboard + shortcut buttons
  const kbIn = $('vcKb');
  $('vcKeyboard').onclick = () => { kbIn.value = ' '; kbIn.focus(); };
@@ -1336,7 +1412,7 @@ async function respondRequest(id, decision, info) {
     catch (e) { showMessage('registerMsg','Screen sharing was not allowed, so the request is still pending. Press Accept again when you are ready.'); return; }
    }
    if (stream) {
-    if (hosting.stream && hosting.wantCtl && !ctl.allowed) await tryAgent(false);
+    if (hosting.stream && hosting.wantCtl && !ctl.allowed && await tryAgent(false)) setControl(true);
     try { await startSharer(id, stream, own); started = true; hosting.peerName = info.requester_device_name || 'Another device'; }
     catch (e) { if (own) stream.getTracks().forEach(t => t.stop()); showMessage('registerMsg','Could not start the live connection: ' + (e?.message || e)); return; }
    }
