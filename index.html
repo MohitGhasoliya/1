@@ -122,6 +122,34 @@ body:has(#authGrid.hidden) .welcome{display:none}
 .sharebar .rec{width:9px;height:9px;flex:none;border-radius:50%;background:var(--bad);animation:pulse 1.4s infinite}
 .sharebar button{padding:8px 12px;font-size:13px;white-space:nowrap}
 @keyframes pulse{50%{opacity:.25}}
+.sharebar{flex-wrap:wrap;justify-content:center}
+#remoteViewerVideo{touch-action:none;outline:none}
+.vctools{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.vctools button{padding:10px 6px;font-size:12.5px}
+#vcKb{position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none}
+.host{margin-top:18px;padding:16px;border:1px solid var(--line2);border-radius:16px;background:var(--card2)}
+.host-top{display:flex;gap:12px;align-items:flex-start}
+.host-dot{width:12px;height:12px;border-radius:50%;background:#6f7e96;margin-top:5px;flex:none}
+.host-dot.ready{background:var(--accent);box-shadow:0 0 0 4px #3ee0cf22}
+.host-dot.live{background:var(--ok);box-shadow:0 0 0 4px #5fdca033;animation:pulse 1.4s infinite}
+.check{display:flex;gap:10px;align-items:center;margin-top:14px;font-size:13px;color:var(--muted);cursor:pointer}
+.check input{width:18px;height:18px;padding:0;accent-color:var(--accent)}
+.saved-card.is-live{border-color:var(--ok);background:linear-gradient(160deg,#5fdca014,var(--card2))}
+.livetxt{color:var(--ok)}
+.overlay.rv{padding:0;background:#050a14;backdrop-filter:none;align-items:stretch}
+.rv-box{width:100%;height:100%;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.rv-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.rv-title{flex:1;min-width:150px;display:flex;flex-direction:column}
+.rv-chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip2{font-size:11.5px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:4px 10px}
+.chip2 span{color:var(--text);font-weight:700}
+.rv-head button{padding:8px 12px;font-size:13px}
+.rv-stage{flex:1;min-height:0;position:relative;background:#000}
+.rv-stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.rv-stage .ph{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;pointer-events:none}
+#vcDot{position:fixed;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:2px solid var(--accent);background:#3ee0cf44;pointer-events:none;opacity:0;transition:opacity .25s;z-index:60}
+.rv .vctools{margin:0;padding:10px 12px;background:var(--card);border-top:1px solid var(--line);grid-template-columns:repeat(5,1fr)}
+@media(max-width:560px){.rv .vctools button{font-size:11px;padding:9px 2px}}
 @media(max-width:860px){.dash{grid-template-columns:1fr}}
 @media(max-width:560px){.wrap{padding:12px}.nav{position:static}.secure{display:none}.auth{margin-top:4vh;padding:22px}.qr-area{flex-direction:column;align-items:flex-start}.chips{grid-template-columns:1fr}.dialog{padding:16px}.saved-list{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
@@ -163,10 +191,16 @@ body:has(#authGrid.hidden) .welcome{display:none}
     <button id="openConnect" class="secondary">Connect with a code</button>
     <button id="openRequests" class="secondary">Pending requests<span id="reqBadge" class="badge hidden">0</span></button>
    </div>
+   <div class="host" id="hostPanel">
+    <div class="host-top"><span class="host-dot" id="hostDot"></span><div><b id="hostTitle">Not hosting</b><div class="saved-meta" id="hostSub"></div></div></div>
+    <label class="check"><input type="checkbox" id="hostCtl"> Allow remote control (needs the MobiPC Agent)</label>
+    <button class="full" id="hostStart">Start hosting this screen</button>
+    <button class="secondary full hidden" id="hostStop">Stop hosting</button>
+   </div>
    <ol class="steps">
     <li><span><b>Register this device.</b> You get an 8-character code and a QR code.</span></li>
     <li><span><b>Enter the other device's code</b> or scan its QR code.</span></li>
-    <li><span><b>Approve on the other device.</b> Nothing starts without the owner's OK.</span></li>
+    <li><span><b>Approve once.</b> After that, trusted devices connect instantly with one tap.</span></li>
    </ol>
    <p class="note">The website handles pairing while it is open. Always-on background access and live control need the native Windows and Android apps.</p>
   </section>
@@ -230,7 +264,7 @@ body:has(#authGrid.hidden) .welcome{display:none}
     <button class="secondary full" id="stopScan">Stop scanner</button>
    </div>
    <div class="message" id="connectMsg"></div>
-   <p class="note">After the owner approves and allows screen sharing, their live screen opens here. Remote mouse and keyboard need the native apps.</p>
+   <p class="note">After the owner approves and allows screen sharing, their live screen opens here. Control also needs the owner's OK and the MobiPC Agent.</p>
   </section>
 
   <p class="note">Only approve requests from devices you recognize. Never share your device code publicly.</p>
@@ -252,26 +286,32 @@ body:has(#authGrid.hidden) .welcome{display:none}
  </div>
 </div>
 
-<div class="overlay" id="remoteViewerOverlay" aria-hidden="true">
- <div class="dialog" style="width:min(100%,980px)">
-  <div class="dialoghead"><h2>Remote device screen</h2><button class="close" id="remoteViewerClose" aria-label="Close">✕</button></div>
-  <p class="status" id="remoteViewerStatus">Pairing approved.</p>
-  <div class="stage">
-   <video id="remoteViewerVideo" autoplay playsinline muted></video>
-   <div id="remoteViewerPlaceholder" class="ph"><div style="font-size:40px">🔗</div><b>Device paired</b><p class="status">The live screen appears here once the other device allows screen sharing.</p></div>
+<div class="overlay rv" id="remoteViewerOverlay" aria-hidden="true">
+ <div class="rv-box">
+  <div class="rv-head">
+   <div class="rv-title"><b id="rvName">Remote screen</b><span class="saved-meta" id="remoteViewerStatus">Connecting…</span></div>
+   <div class="rv-chips"><span class="chip2">Screen <span id="remoteScreenState">Connecting…</span></span><span class="chip2">Control <span id="vcState">Off</span></span></div>
+   <button class="secondary" id="remoteFullscreen" title="Full screen">⛶</button>
+   <button class="secondary" id="remoteViewerClose" title="Hide, keep the session running">Hide</button>
+   <button class="danger" id="remoteViewerDone">End session</button>
   </div>
-  <div class="chips">
-   <div class="chip"><b>Screen</b><span id="remoteScreenState">Waiting for WebRTC</span></div>
-   <div class="chip"><b>Input control</b>Not connected</div>
-   <div class="chip"><b>Session</b>Pairing approved</div>
+  <div class="rv-stage">
+   <video id="remoteViewerVideo" autoplay playsinline muted tabindex="0"></video>
+   <div id="remoteViewerPlaceholder" class="ph"><div><div style="font-size:40px">🔗</div><b>Connected</b><p class="status">Waiting for the other device to share its screen…<br>Tip: rotate your phone for a bigger view.</p></div></div>
+   <i id="vcDot"></i>
   </div>
-  <p class="note">Live view works when the other device shares its screen from a desktop browser and the owner allows it. Mouse and keyboard control need the native apps.</p>
-  <button class="full" id="remoteFullscreen">⛶ Full screen</button>
-  <button class="secondary full" id="remoteViewerDone">Close viewer</button>
+  <div class="vctools hidden" id="vcTools">
+   <button class="secondary" id="vcKeyboard">⌨ Keyboard</button>
+   <button class="secondary" id="vcRight">Right-click: off</button>
+   <button class="secondary" id="vcDrag">Drag mode: off</button>
+   <button class="secondary" id="vcEsc">Esc</button>
+   <button class="secondary" id="vcWin">Win</button>
+  </div>
+  <input id="vcKb" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Remote keyboard input">
  </div>
 </div>
 
-<div class="sharebar hidden" id="shareBar" role="status"><i class="rec"></i><span id="shareBarText">Your screen is being shared</span><button class="danger" id="shareBarStop">Stop sharing</button></div>
+<div class="sharebar hidden" id="shareBar" role="status"><i class="rec"></i><span id="shareBarText">Hosting your screen</span><button class="secondary" id="shareCtl">Allow control</button><button class="secondary hidden" id="shareEnd">End session</button><button class="danger" id="shareBarStop">Stop hosting</button></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -297,6 +337,8 @@ let heartbeatTimer = null;
 let registeredDevice = null;
 let savedDevicesCache = [];
 let currentOutgoingRequestId = null;
+let lastTargetId = null, lastPaired = [], reqInfo = {};
+const live = {}, announced = new Set();
 let incomingPollTimer = null;
 let outgoingPollTimer = null;
 let deviceRefreshTimer = null;
@@ -356,48 +398,58 @@ async function loadPairedDevices() {
  if (!sb || !session?.user) return;
  const host = $('pairedDevices');
  if (!host) return;
- host.innerHTML = '<div class="status">Loading connected devices...</div>';
  const {data,error} = await sb.rpc('get_paired_devices');
  if (error) {
-  host.innerHTML = '<div class="request-empty">Could not load connected devices: ' + escapeHTML(error.message) + '<br>Supabase get_paired_devices function needs to return peer_device_id, peer_device_name, peer_device_type, peer_last_seen_at and peer_device_code.</div>';
+  host.innerHTML = '<div class="request-empty">Could not load connected devices: ' + escapeHTML(error.message) + '</div>';
   return;
  }
  const mine = ['pc','android'].map(t => localStorage.getItem(localDeviceKey(t))).filter(Boolean);
- const devices = (data || []).filter(d => !mine.includes(String(d.peer_device_id)));
- if (!devices.length) {
+ lastPaired = (data || []).filter(d => !mine.includes(String(d.peer_device_id)));
+ renderPaired();
+}
+function renderPaired() {
+ const host = $('pairedDevices');
+ if (!host) return;
+ if (!lastPaired.length) {
   host.innerHTML = '<div class="request-empty">No paired devices yet. Open Connect, enter the code of the other device, then accept the request on that device.</div>';
   return;
  }
- host.innerHTML = devices.map(d => {
-  const seen = d.peer_last_seen_at || d.last_seen_at;
+ host.innerHTML = lastPaired.map(d => {
+  const seen = d.peer_last_seen_at;
   const online = seen && (Date.now() - new Date(seen).getTime() < 90000);
-  const type = String(d.peer_device_type || d.device_type || '').toLowerCase();
-  const icon = type === 'pc' ? '💻' : '📱';
-  const code = d.peer_device_code || d.device_code || d.code || '';
-  const peerId = d.peer_device_id || d.device_id || '';
-  return `<article class="saved-card">
-   <h4>${icon} ${escapeHTML(d.peer_device_name || d.device_name || 'Connected device')}</h4>
-   <div class="saved-meta">${type === 'pc' ? 'Windows PC' : 'Android device'} · ${online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline'}</div>
-   <div class="saved-actions">
-    <button data-connect-code="${escapeHTML(String(code))}" ${(!online || !code) ? 'disabled' : ''}>Connect</button>
-    <button class="danger" data-disconnect-peer="${escapeHTML(String(peerId))}" ${!peerId ? 'disabled' : ''}>Disconnect</button>
-   </div>
-   ${!code ? '<div class="saved-meta">This device has no code, so it cannot be connected from here.</div>' : ''}
-  </article>`;
+  const type = String(d.peer_device_type || '').toLowerCase();
+  const code = d.peer_device_code || '';
+  const peerId = String(d.peer_device_id || '');
+  const lv = live[peerId];
+  const status = lv ? '<span class="online-dot"></span><b class="livetxt">Connected · live</b>'
+   : online ? '<span class="online-dot"></span>Online' : '<span class="offline-dot"></span>Offline';
+  const main = lv
+   ? (lv.role === 'viewer' ? '<button data-view>View screen</button>' : '') + '<button class="secondary" data-end>End session</button>'
+   : '<button data-connect-code="' + escapeHTML(code) + '" ' + ((!online || !code) ? 'disabled' : '') + '>Connect</button>';
+  return '<article class="saved-card' + (lv ? ' is-live' : '') + '">' +
+   '<h4>' + (type === 'pc' ? '💻' : '📱') + ' ' + escapeHTML(d.peer_device_name || 'Connected device') + '</h4>' +
+   '<div class="saved-meta">' + (type === 'pc' ? 'Windows PC' : 'Android device') + ' · ' + status + '</div>' +
+   '<div class="saved-actions">' + main + '<button class="danger" data-disconnect-peer="' + escapeHTML(peerId) + '" ' + (!peerId ? 'disabled' : '') + '>Remove</button></div>' +
+   (!code && !lv ? '<div class="saved-meta">This device has no code, so it cannot be connected from here.</div>' : '') +
+  '</article>';
  }).join('');
  host.querySelectorAll('[data-connect-code]').forEach(btn => btn.onclick = async () => {
-  if (!btn.disabled) await requestConnection(btn.getAttribute('data-connect-code'), 'savedMsg');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Connecting…';
+  await requestConnection(btn.getAttribute('data-connect-code'), 'savedMsg');
  });
+ host.querySelectorAll('[data-view]').forEach(b => b.onclick = showRemoteViewer);
+ host.querySelectorAll('[data-end]').forEach(b => b.onclick = endSession);
  host.querySelectorAll('[data-disconnect-peer]').forEach(btn => btn.onclick = async () => {
-  if (btn.disabled || !confirm('Remove this pairing? You will need to enter the device code again next time.')) return;
-  btn.disabled = true; btn.textContent = 'Disconnecting…';
+  if (btn.disabled || !confirm('Remove this pairing? You will need to enter the device code again and approve once more.')) return;
+  btn.disabled = true; btn.textContent = 'Removing…';
   const {error: removeError} = await sb.rpc('remove_paired_device', {p_peer_device_id: btn.getAttribute('data-disconnect-peer')});
   if (removeError) {
-   $('savedMsg').textContent = 'Could not disconnect: ' + removeError.message + '. The remove_paired_device function is missing in Supabase.';
-   btn.disabled = false; btn.textContent = 'Disconnect';
+   $('savedMsg').textContent = 'Could not remove: ' + removeError.message;
+   btn.disabled = false; btn.textContent = 'Remove';
    return;
   }
-  $('savedMsg').textContent = 'Device disconnected and pairing removed.';
+  $('savedMsg').textContent = 'Pairing removed.';
   await loadPairedDevices();
  });
 }
@@ -580,7 +632,7 @@ $('signin').onclick = async () => {
 };
 
 $('signout').onclick = async () => {
- const result = await sb.auth.signOut();
+ const result = stopHosting(true); await sb.auth.signOut();
  if (result.error) return setStatus(result.error.message);
  session = null;
  if (heartbeatTimer) clearInterval(heartbeatTimer); heartbeatTimer = null;
@@ -718,7 +770,7 @@ async function requestConnection(rawCode, messageTarget = 'connectMsg') {
  showMessage(messageTarget,'Request sent successfully. Waiting for the other device to approve...');
  if (outgoingPollTimer) clearInterval(outgoingPollTimer);
  await refreshOutgoingStatus();
- outgoingPollTimer = setInterval(refreshOutgoingStatus,5000);
+ outgoingPollTimer = setInterval(refreshOutgoingStatus,1500);
 }
 $('sendRequest').onclick = () => requestConnection($('manualCode').value);
 $('refreshPairedDevices').onclick = loadPairedDevices;
@@ -791,16 +843,26 @@ async function refreshIncomingRequests() {
  }
  const owned = (requests || []).filter(req => String(req.device_type || '').toLowerCase() === currentDevice);
  const rb = $('reqBadge'); if (rb) { rb.textContent = owned.length; rb.classList.toggle('hidden', !owned.length); }
+ owned.forEach(r => { reqInfo[r.request_id] = r; });
+ if (hosting.stream && !approving) {
+  const auto = owned.find(r => r.trusted && Date.now() - new Date(r.created_at).getTime() < 120000);
+  if (auto) respondRequest(auto.request_id, 'approve', auto);
+ }
+ const fresh = owned.filter(r => !r.trusted && !announced.has(r.request_id));
+ if (fresh.length) {
+  fresh.forEach(r => announced.add(r.request_id));
+  if (!$('overlay').classList.contains('open')) { openDevice(currentDevice); switchTab('register'); }
+ }
  if (!owned.length) {
   list.innerHTML = '<div class="request-empty">No pending requests for this ' + (currentDevice === 'pc' ? 'PC' : 'Android device') + '.</div>';
   return;
  }
  list.innerHTML = owned.map(req =>
   '<article class="request-card">' +
-   '<b>Connection request for ' + escapeHTML(req.device_name) + '</b>' +
+   '<b>' + escapeHTML(req.requester_device_name || 'A device') + ' wants to connect to ' + escapeHTML(req.device_name) + '</b>' +
    '<div class="saved-meta">' + escapeHTML(req.device_type === 'pc' ? 'Windows PC' : 'Android device') + ' · ' + new Date(req.created_at).toLocaleString() + '</div>' +
    '<div class="request-actions">' +
-    '<button data-approve="' + req.request_id + '">' + (navigator.mediaDevices?.getDisplayMedia ? 'Accept &amp; share screen' : 'Accept') + '</button>' +
+    '<button data-approve="' + req.request_id + '">' + ((!hosting.stream && navigator.mediaDevices?.getDisplayMedia) ? 'Accept &amp; share screen' : 'Accept') + '</button>' +
     '<button class="danger" data-reject="' + req.request_id + '">Reject</button>' +
    '</div>' +
   '</article>'
@@ -819,7 +881,7 @@ async function subscribeIncoming() {
  if (!sb || !session?.user) return;
  await refreshIncomingRequests();
  if (incomingPollTimer) clearInterval(incomingPollTimer);
- incomingPollTimer = setInterval(refreshIncomingRequests,5000);
+ incomingPollTimer = setInterval(refreshIncomingRequests,2500);
 }
 
 let lastOpenedApprovedRequestId = null;
@@ -827,36 +889,46 @@ function openRemoteViewer() {
  const viewer = $('remoteViewerOverlay');
  viewer.classList.add('open');
  viewer.setAttribute('aria-hidden','false');
- $('remoteViewerStatus').textContent = 'Approved. Waiting for the owner to allow screen sharing…';
+ $('remoteViewerStatus').textContent = 'Connected. Starting the live screen…';
+ const pd = lastPaired.find(d => String(d.peer_device_id) === String(lastTargetId));
+ $('rvName').textContent = pd ? (pd.peer_device_name || 'Remote screen') : 'Remote screen';
  $('remoteScreenState').textContent = 'Waiting for WebRTC';
  $('remoteViewerPlaceholder').classList.remove('hidden');
  $('remoteViewerVideo').srcObject = null;
  startViewer(currentOutgoingRequestId).catch(e => { $('remoteViewerStatus').textContent = 'Could not start the live view: ' + (e?.message || e); });
+}
+function showRemoteViewer() { $('remoteViewerOverlay').classList.add('open'); $('remoteViewerOverlay').setAttribute('aria-hidden','false'); }
+function hideRemoteViewer() { $('remoteViewerOverlay').classList.remove('open'); $('remoteViewerOverlay').setAttribute('aria-hidden','true'); }
+function endSession() {
+ if (rtc) stopRtc(true);
+ hideRemoteViewer();
+ $('savedMsg').textContent = 'Session ended. Press Connect to connect again.';
 }
 function closeRemoteViewer() {
  if (rtc && rtc.role === 'viewer') stopRtc(true);
  $('remoteViewerOverlay').classList.remove('open');
  $('remoteViewerOverlay').setAttribute('aria-hidden','true');
 }
-$('remoteViewerClose').onclick = closeRemoteViewer;
-$('remoteViewerDone').onclick = closeRemoteViewer;
-$('remoteViewerOverlay').addEventListener('click', e => { if (e.target === $('remoteViewerOverlay')) closeRemoteViewer(); });
+$('remoteViewerClose').onclick = hideRemoteViewer;
+$('remoteViewerDone').onclick = endSession;
+
 
 async function refreshOutgoingStatus() {
  if (!sb || !session?.user || !currentOutgoingRequestId) return;
  const {data,error} = await sb.from('connection_requests')
-  .select('status')
+  .select('status,target_device_id')
   .eq('id',currentOutgoingRequestId)
   .maybeSingle();
  if (error || !data) return;
  const status = String(data.status || 'pending').toLowerCase();
+ lastTargetId = data.target_device_id || lastTargetId;
  const message = status === 'approved'
   ? '✓ Request approved. Opening the live viewer…'
   : status === 'rejected'
    ? 'REJECTED: The device owner rejected the connection request.'
    : status === 'expired'
     ? 'EXPIRED: This connection request expired. Send a new request.'
-    : 'PENDING: Request sent. Waiting for device owner approval...';
+    : 'Request sent. Waiting for the other device… (a new device must be approved once)';
  $('savedMsg').textContent = message;
  $('connectMsg').textContent = message;
  $('connectMsg').classList.add('show');
@@ -874,7 +946,7 @@ function subscribeRequestStatus() {
  if (outgoingPollTimer) clearInterval(outgoingPollTimer);
  if (currentOutgoingRequestId) {
   refreshOutgoingStatus();
-  outgoingPollTimer = setInterval(refreshOutgoingStatus,5000);
+  outgoingPollTimer = setInterval(refreshOutgoingStatus,1500);
  }
 }
 let activeScreenStream = null;
@@ -937,6 +1009,7 @@ function escapeHTML(value) {
 const RTC_CFG = {iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}]};
 let rtc = null;
 let approving = false;
+const hosting = {stream:null, wantCtl:false, peerName:''};
 
 function rtcChannel(id, onMsg) {
  return new Promise((resolve, reject) => {
@@ -964,21 +1037,36 @@ function stopRtc(notify) {
  const r = rtc; rtc = null;
  clearInterval(r.timer);
  if (notify && r.ch) { try { r.ch.send({type:'broadcast', event:'bye', payload:{}}); } catch (e) {} }
- if (r.stream) r.stream.getTracks().forEach(t => t.stop());
+ if (r.stream && r.ownStream) r.stream.getTracks().forEach(t => t.stop());
  try { r.pc.close(); } catch (e) {}
  if (r.ch) setTimeout(() => sb.removeChannel(r.ch), 400);
- if (r.role === 'sharer') $('shareBar').classList.add('hidden');
+ if (r.role === 'sharer') {
+  for (const k in live) if (live[k].role === 'host') delete live[k];
+  hosting.peerName = '';
+  if (!hosting.stream) setControl(false);
+  syncBar(); renderHost(); renderPaired();
+ }
+ if (r.role === 'viewer') {
+  for (const k in live) if (live[k].role === 'viewer') delete live[k];
+  viewerControl(false); renderPaired();
+ }
 }
-$('shareBarStop').onclick = () => { stopRtc(true); showMessage('registerMsg','Screen sharing stopped.'); };
+$('shareBarStop').onclick = () => { if (hosting.stream) stopHosting(true); else { stopRtc(true); showMessage('registerMsg','Screen sharing stopped.'); } };
+$('shareEnd').onclick = () => { stopRtc(true); showMessage('registerMsg','Session ended. Still hosting.'); };
 $('remoteFullscreen').onclick = () => { const v = $('remoteViewerVideo'); (v.requestFullscreen || v.webkitRequestFullscreen || function(){}).call(v); };
 
-async function startSharer(id, stream) {
- stopRtc(false);
+async function startSharer(id, stream, own) {
+ stopRtc(true);
  const pc = new RTCPeerConnection(RTC_CFG);
- const r = rtc = {role:'sharer', id, pc, stream};
+ const r = rtc = {role:'sharer', id, pc, stream, ownStream: own !== false};
  stream.getTracks().forEach(t => pc.addTrack(t, stream));
+ pc.ondatachannel = e => {
+  r.dc = e.channel;
+  e.channel.onopen = () => { if (ctl.allowed) setControl(true); };
+  e.channel.onmessage = m => { if (ctl.allowed && ctl.ws && ctl.ws.readyState === 1) ctl.ws.send(m.data); };
+ };
  const vt = stream.getVideoTracks()[0];
- if (vt) vt.onended = () => { if (rtc === r) { stopRtc(true); showMessage('registerMsg','Screen sharing stopped.'); } };
+ if (vt && own !== false) vt.onended = () => { if (rtc === r) { stopRtc(true); showMessage('registerMsg','Screen sharing stopped.'); } };
  pc.onconnectionstatechange = () => {
   if (rtc !== r) return;
   if (pc.connectionState === 'connected') showShareBar('Your screen is being shared');
@@ -1004,10 +1092,14 @@ async function startSharer(id, stream) {
 }
 
 async function startViewer(id) {
- stopRtc(false);
+ stopRtc(true);
  const pc = new RTCPeerConnection(RTC_CFG);
  const r = rtc = {role:'viewer', id, pc};
+ if (lastTargetId) { live[lastTargetId] = {role:'viewer'}; renderPaired(); }
  pc.addTransceiver('video', {direction:'recvonly'});
+ r.dc = pc.createDataChannel('ctl');
+ r.dc.onmessage = m => { try { const o = JSON.parse(m.data); if (o.t === 'ctlstate') viewerControl(o.on); } catch (e) {} };
+ r.dc.onclose = () => viewerControl(false);
  pc.ontrack = e => {
   if (rtc !== r) return;
   const v = $('remoteViewerVideo');
@@ -1052,17 +1144,202 @@ async function startViewer(id) {
  r.timer = setInterval(send, 3000);
 }
 
-async function respondRequest(id,decision) {
+// ===== Remote control (viewer -> data channel -> owner page -> local MobiPC Agent) =====
+const ctl = {ws:null, allowed:false};
+const vctl = {on:false, drag:false};
+function agentConnect(token) {
+ return new Promise((resolve, reject) => {
+  let ws; try { ws = new WebSocket('ws://127.0.0.1:8765'); } catch (e) { return reject(e); }
+  const t = setTimeout(() => { try { ws.close(); } catch (e) {} reject(new Error('timeout')); }, 5000);
+  ws.onopen = () => ws.send(JSON.stringify({token}));
+  ws.onmessage = e => { if (e.data === 'ok') { clearTimeout(t); ctl.ws = ws; resolve(); } };
+  ws.onclose = () => { clearTimeout(t); if (ctl.ws === ws) { ctl.ws = null; if (ctl.allowed) setControl(false); } reject(new Error('closed')); };
+ });
+}
+function setControl(on) {
+ ctl.allowed = on;
+ $('shareCtl').textContent = on ? 'Control ON · tap to stop' : 'Allow control';
+ if (!on && ctl.ws) { try { ctl.ws.close(); } catch (e) {} ctl.ws = null; }
+ const dc = rtc && rtc.dc;
+ if (dc && dc.readyState === 'open') dc.send(JSON.stringify({t:'ctlstate', on}));
+}
+$('shareCtl').onclick = async () => {
+ const stm = hosting.stream || (rtc && rtc.stream);
+ if (!stm) return;
+ if (ctl.allowed) { setControl(false); hosting.wantCtl = false; syncBar(); return; }
+ const st = stm.getVideoTracks()[0]?.getSettings?.() || {};
+ if (st.displaySurface && st.displaySurface !== 'monitor') { showShareBar('Control needs "Entire screen". Stop sharing and share again, choosing Entire screen.'); return; }
+ if (await tryAgent(true)) { hosting.wantCtl = true; return; }
+ showShareBar('Could not reach the MobiPC Agent. Start it on this PC and check the token.');
+};
+async function tryAgent(prompting) {
+ let token = localStorage.getItem('mobipc_agent_token');
+ if (!token && prompting) token = (prompt('Enter the token shown by the MobiPC Agent on this PC:') || '').trim();
+ if (!token) return false;
+ try { await agentConnect(token); localStorage.setItem('mobipc_agent_token', token); setControl(true); syncBar(); return true; }
+ catch (e) { return false; }
+}
+function syncBar() {
+ const sharing = !!(rtc && rtc.role === 'sharer');
+ const show = !!hosting.stream || sharing;
+ $('shareBar').classList.toggle('hidden', !show);
+ $('shareEnd').classList.toggle('hidden', !sharing);
+ $('shareBarStop').textContent = hosting.stream ? 'Stop hosting' : 'Stop sharing';
+ if (show) $('shareBarText').textContent = sharing
+  ? 'Connected: ' + (hosting.peerName || 'other device') + (ctl.allowed ? ' · control ON' : ' · view only')
+  : 'Hosting your screen · ready for trusted devices';
+}
+function renderHost() {
+ const can = !!navigator.mediaDevices?.getDisplayMedia;
+ const on = !!hosting.stream, sharing = !!(rtc && rtc.role === 'sharer');
+ $('hostStart').classList.toggle('hidden', on || !can);
+ $('hostStop').classList.toggle('hidden', !on);
+ $('hostCtl').closest('label').classList.toggle('hidden', on || !can);
+ $('hostDot').className = 'host-dot' + (on ? (sharing ? ' live' : ' ready') : '');
+ $('hostTitle').textContent = !can ? 'This browser cannot share its screen' : on ? (sharing ? 'Connected' : 'Ready for connections') : 'Not hosting';
+ $('hostSub').textContent = !can ? 'Android browsers cannot share the screen. To view a phone from a PC, the MobiPC Android app is needed.'
+  : on ? (sharing ? (hosting.peerName || 'A device') + ' is viewing your screen.' : 'Trusted devices connect instantly. A new device needs your OK once.')
+  : 'Share your screen once. Trusted devices then connect instantly, with no repeated popups.';
+}
+async function startHosting() {
+ if (!navigator.mediaDevices?.getDisplayMedia || hosting.stream) return;
+ if (!session?.user) { $('hostSub').textContent = 'Please sign in first.'; return; }
+ let stream;
+ try { stream = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}}, audio:false}); }
+ catch (e) { $('hostSub').textContent = 'Screen sharing was not allowed. Press Start hosting when you are ready.'; return; }
+ hosting.stream = stream;
+ hosting.wantCtl = $('hostCtl').checked;
+ localStorage.setItem('mobipc_host_ctl', hosting.wantCtl ? '1' : '0');
+ stream.getVideoTracks()[0].onended = () => stopHosting(true);
+ syncBar(); renderHost();
+ if (hosting.wantCtl) {
+  const st = stream.getVideoTracks()[0].getSettings?.() || {};
+  if (st.displaySurface && st.displaySurface !== 'monitor') $('hostSub').textContent = 'Control needs "Entire screen". Hosting is view-only. Stop and choose Entire screen to allow control.';
+  else if (!(await tryAgent(true))) $('hostSub').textContent = 'MobiPC Agent not reachable. Hosting is view-only until you start the agent.';
+ }
+ refreshIncomingRequests();
+}
+function stopHosting(notify) {
+ if (rtc && rtc.role === 'sharer') stopRtc(notify);
+ if (hosting.stream) { hosting.stream.getTracks().forEach(t => t.stop()); hosting.stream = null; }
+ setControl(false); syncBar(); renderHost();
+}
+$('hostStart').onclick = startHosting;
+$('hostStop').onclick = () => stopHosting(true);
+$('hostCtl').checked = localStorage.getItem('mobipc_host_ctl') !== '0';
+renderHost();
+
+function viewerControl(on) {
+ vctl.on = on; vctl.drag = false; vctl.rightOnce = false;
+ $('vcDrag').textContent = 'Drag mode: off';
+ $('vcRight').textContent = 'Right-click: off';
+ $('vcTools').classList.toggle('hidden', !on);
+ $('vcState').textContent = on ? 'On' : 'Off';
+ if (on) $('remoteViewerStatus').textContent = 'Tap = click · hold = right click · two fingers = scroll';
+}
+function ctlSend(o) {
+ const dc = rtc && rtc.role === 'viewer' && rtc.dc;
+ if (vctl.on && dc && dc.readyState === 'open') dc.send(JSON.stringify(o));
+}
+function vpt(cx, cy) {
+ const v = $('remoteViewerVideo'), r = v.getBoundingClientRect();
+ if (!v.videoWidth) return null;
+ const s = Math.min(r.width / v.videoWidth, r.height / v.videoHeight), w = v.videoWidth * s, h = v.videoHeight * s;
+ const x = (cx - (r.left + (r.width - w) / 2)) / w, y = (cy - (r.top + (r.height - h) / 2)) / h;
+ return (x < 0 || x > 1 || y < 0 || y > 1) ? null : {x, y};
+}
+(function bindControlInput() {
+ const vid = $('remoteViewerVideo');
+ let lastMove = 0, tch = null;
+ const dot = $('vcDot');
+ const showDot = (x, y) => { dot.style.left = x + 'px'; dot.style.top = y + 'px'; dot.style.opacity = 1; };
+ $('vcRight').onclick = () => { vctl.rightOnce = !vctl.rightOnce; $('vcRight').textContent = 'Right-click: ' + (vctl.rightOnce ? 'on' : 'off'); };
+ const throttled = () => { const n = Date.now(); if (n - lastMove < 30) return false; lastMove = n; return true; };
+ // mouse + keyboard (desktop viewer)
+ vid.addEventListener('mousemove', e => { if (!vctl.on || !throttled()) return; const p = vpt(e.clientX, e.clientY); if (p) ctlSend({t:'move', ...p}); });
+ vid.addEventListener('mousedown', e => { if (!vctl.on) return; e.preventDefault(); vid.focus(); const p = vpt(e.clientX, e.clientY); if (p) ctlSend({t:'down', b:e.button, ...p}); });
+ vid.addEventListener('mouseup', e => { if (!vctl.on) return; const p = vpt(e.clientX, e.clientY); ctlSend({t:'up', b:e.button, ...(p || {})}); });
+ vid.addEventListener('contextmenu', e => e.preventDefault());
+ vid.addEventListener('wheel', e => { if (!vctl.on) return; e.preventDefault(); ctlSend({t:'wheel', dy:e.deltaY}); }, {passive:false});
+ vid.addEventListener('keydown', e => {
+  if (!vctl.on || ['Control','Shift','Alt','Meta'].includes(e.key)) return;
+  e.preventDefault();
+  ctlSend({t:'key', k:e.key, c:e.ctrlKey, a:e.altKey, s:e.shiftKey, m:e.metaKey});
+ });
+ // touch (phone viewer): tap = click, hold = right click, 2 fingers = scroll, drag mode = hold + move
+ vid.addEventListener('touchstart', e => {
+  if (!vctl.on) return;
+  e.preventDefault();
+  const t = e.touches;
+  if (t.length >= 2) { if (tch) clearTimeout(tch.lp); tch = {scroll:true, y:(t[0].clientY + t[1].clientY) / 2}; return; }
+  const p = vpt(t[0].clientX, t[0].clientY);
+  if (!p) { tch = null; return; }
+  tch = {x0:t[0].clientX, y0:t[0].clientY, moved:false, long:false, t0:Date.now(), last:p};
+  showDot(t[0].clientX, t[0].clientY);
+  ctlSend({t:'move', ...p});
+  if (vctl.drag) ctlSend({t:'down', b:0, ...p});
+  else tch.lp = setTimeout(() => { if (tch && !tch.moved && !tch.scroll) { tch.long = true; ctlSend({t:'click', b:2, ...tch.last}); } }, 500);
+ }, {passive:false});
+ vid.addEventListener('touchmove', e => {
+  if (!vctl.on || !tch) return;
+  e.preventDefault();
+  const t = e.touches;
+  if (tch.scroll && t.length >= 2) {
+   const mid = (t[0].clientY + t[1].clientY) / 2, d = mid - tch.y;
+   if (Math.abs(d) > 6) { ctlSend({t:'wheel', dy:-d * 2}); tch.y = mid; }
+   return;
+  }
+  if (tch.scroll) return;
+  if (Math.hypot(t[0].clientX - tch.x0, t[0].clientY - tch.y0) > 10) { tch.moved = true; clearTimeout(tch.lp); }
+  const p = vpt(t[0].clientX, t[0].clientY);
+  showDot(t[0].clientX, t[0].clientY);
+  if (p) { tch.last = p; if (tch.moved && throttled()) ctlSend({t:'move', ...p}); }
+ }, {passive:false});
+ vid.addEventListener('touchend', e => {
+  if (!vctl.on) return;
+  e.preventDefault();
+  if (e.touches.length > 0 || !tch) return;
+  clearTimeout(tch.lp);
+  setTimeout(() => { dot.style.opacity = 0; }, 250);
+  if (!tch.scroll) {
+   if (vctl.drag) ctlSend({t:'up', b:0, ...tch.last});
+   else if (!tch.moved && !tch.long && Date.now() - tch.t0 < 500) { ctlSend({t:'click', b:vctl.rightOnce ? 2 : 0, ...tch.last}); if (vctl.rightOnce) { vctl.rightOnce = false; $('vcRight').textContent = 'Right-click: off'; } }
+  }
+  tch = null;
+ }, {passive:false});
+ // phone keyboard + shortcut buttons
+ const kbIn = $('vcKb');
+ $('vcKeyboard').onclick = () => { kbIn.value = ' '; kbIn.focus(); };
+ kbIn.addEventListener('input', () => {
+  if (!vctl.on) return;
+  const v = kbIn.value;
+  if (v.length < 1) ctlSend({t:'key', k:'Backspace'});
+  else if (v.length > 1) ctlSend({t:'text', s:v.slice(1)});
+  kbIn.value = ' ';
+ });
+ kbIn.addEventListener('keydown', e => { if (vctl.on && e.key === 'Enter') { e.preventDefault(); ctlSend({t:'key', k:'Enter'}); } });
+ $('vcDrag').onclick = () => { vctl.drag = !vctl.drag; $('vcDrag').textContent = 'Drag mode: ' + (vctl.drag ? 'on' : 'off'); };
+ $('vcEsc').onclick = () => ctlSend({t:'key', k:'Escape'});
+ $('vcWin').onclick = () => ctlSend({t:'key', k:'Meta'});
+})();
+
+async function respondRequest(id, decision, info) {
  if (approving) return;
  approving = true;
  try {
+  info = info || reqInfo[id] || {};
   let started = false;
-  if (decision === 'approve' && navigator.mediaDevices?.getDisplayMedia) {
-   let stream;
-   try { stream = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}}, audio:false}); }
-   catch (e) { showMessage('registerMsg','Screen sharing was not allowed, so the request is still pending. Press Accept again when you are ready.'); return; }
-   try { await startSharer(id, stream); started = true; }
-   catch (e) { stream.getTracks().forEach(t => t.stop()); showMessage('registerMsg','Could not start the live connection: ' + (e?.message || e)); return; }
+  if (decision === 'approve') {
+   let stream = hosting.stream, own = false;
+   if (!stream && navigator.mediaDevices?.getDisplayMedia) {
+    try { stream = await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:30}}, audio:false}); own = true; }
+    catch (e) { showMessage('registerMsg','Screen sharing was not allowed, so the request is still pending. Press Accept again when you are ready.'); return; }
+   }
+   if (stream) {
+    if (hosting.stream && hosting.wantCtl && !ctl.allowed) await tryAgent(false);
+    try { await startSharer(id, stream, own); started = true; hosting.peerName = info.requester_device_name || 'Another device'; }
+    catch (e) { if (own) stream.getTracks().forEach(t => t.stop()); showMessage('registerMsg','Could not start the live connection: ' + (e?.message || e)); return; }
+   }
   }
   const result = await sb.rpc('respond_device_connection',{p_request_id:id, p_decision:decision});
   if (result.error) {
@@ -1070,8 +1347,10 @@ async function respondRequest(id,decision) {
    showMessage('registerMsg','Could not update request: ' + result.error.message);
    return;
   }
+  if (started && info.requester_device_id) live[String(info.requester_device_id)] = {role:'host'};
+  syncBar(); renderHost(); renderPaired();
   showMessage('registerMsg', decision === 'approve'
-   ? (started ? 'Accepted. Your screen is being shared. Use Stop sharing any time.' : 'Accepted. This browser cannot share a screen, so only pairing is active. Use a desktop browser or the native app to share.')
+   ? (started ? 'Connected. Your screen is being shared.' : 'Accepted. This browser cannot share a screen, so only pairing is active.')
    : 'Connection request rejected.');
   await refreshOutgoingStatus();
   loadSavedDevices();
