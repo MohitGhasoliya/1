@@ -195,7 +195,8 @@ body:has(#authGrid.hidden) .welcome{display:none}
    </div>
    <div class="host" id="hostPanel">
     <div class="host-top"><span class="host-dot" id="hostDot"></span><div><b id="hostTitle">Not hosting</b><div class="saved-meta" id="hostSub"></div></div></div>
-    <label class="check"><input type="checkbox" id="hostCtl"> Allow remote control (needs the MobiPC Agent)</label>
+    <label class="check"><input type="checkbox" id="hostCtl"><span id="hostCtlText">Allow remote control (needs the MobiPC Agent)</span></label>
+    <div class="saved-meta hidden" id="hostA11y" style="margin-top:12px">Remote control needs the MobiPC Accessibility service.<button class="secondary full" id="hostA11yBtn">Turn on in Settings</button></div>
     <button class="full" id="hostStart">Start hosting this screen</button>
     <button class="secondary full hidden" id="hostStop">Stop hosting</button>
    </div>
@@ -344,6 +345,9 @@ let savedDevicesCache = [];
 let currentOutgoingRequestId = null;
 let lastTargetId = null, lastPaired = [], reqInfo = {};
 const live = {}, announced = new Set();
+const APP = window.MobiBridge || null;
+const nat = {hosting:false, control:false, a11y:false, peerId:'', peerName:'', note:''};
+function pushSession(s) { if (APP && s) { try { APP.saveSession(SUPABASE_URL, SUPABASE_KEY, s.access_token, s.refresh_token); } catch (e) {} } }
 let incomingPollTimer = null;
 let outgoingPollTimer = null;
 let deviceRefreshTimer = null;
@@ -563,6 +567,7 @@ async function initSupabase() {
  }
 
  sb = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+ if (APP) { try { const ns = JSON.parse(APP.getSession() || 'null'); if (ns && ns.a) await sb.auth.setSession({access_token:ns.a, refresh_token:ns.r}); } catch (e) {} }
  const result = await sb.auth.getSession();
 
  if (result.error) {
@@ -571,10 +576,12 @@ async function initSupabase() {
  }
 
  session = result.data.session;
+ pushSession(session);
  updateAuthUI();
 
  sb.auth.onAuthStateChange((_event,newSession) => {
   session = newSession;
+  pushSession(newSession);
   updateAuthUI();
   if (session) {
    subscribeIncoming(); loadSavedDevices(); startHeartbeat(); subscribeRequestStatus();
@@ -637,7 +644,9 @@ $('signin').onclick = async () => {
 };
 
 $('signout').onclick = async () => {
- const result = stopHosting(true); await sb.auth.signOut();
+ stopHosting(true);
+ if (APP) { try { APP.stopHost(); APP.clearSession(); } catch (e) {} }
+ const result = await sb.auth.signOut();
  if (result.error) return setStatus(result.error.message);
  session = null;
  if (heartbeatTimer) clearInterval(heartbeatTimer); heartbeatTimer = null;
@@ -1203,15 +1212,20 @@ function syncBar() {
   : 'Hosting your screen · ready for trusted devices';
 }
 function renderHost() {
- const can = !!navigator.mediaDevices?.getDisplayMedia;
- const on = !!hosting.stream, sharing = !!(rtc && rtc.role === 'sharer');
+ const can = !!APP || !!navigator.mediaDevices?.getDisplayMedia;
+ const on = APP ? !!nat.hosting : !!hosting.stream;
+ const sharing = APP ? !!nat.peerId : !!(rtc && rtc.role === 'sharer');
+ const who = (APP ? nat.peerName : hosting.peerName) || 'A device';
  $('hostStart').classList.toggle('hidden', on || !can);
  $('hostStop').classList.toggle('hidden', !on);
  $('hostCtl').closest('label').classList.toggle('hidden', on || !can);
+ $('hostCtlText').textContent = APP ? 'Allow remote control (needs Accessibility permission)' : 'Allow remote control (needs the MobiPC Agent)';
+ $('hostA11y').classList.toggle('hidden', !(APP && !nat.a11y && (on || $('hostCtl').checked)));
  $('hostDot').className = 'host-dot' + (on ? (sharing ? ' live' : ' ready') : '');
  $('hostTitle').textContent = !can ? 'This browser cannot share its screen' : on ? (sharing ? 'Connected' : 'Ready for connections') : 'Not hosting';
- $('hostSub').textContent = !can ? 'Android browsers cannot share the screen. To view a phone from a PC, the MobiPC Android app is needed.'
-  : on ? (sharing ? (hosting.peerName || 'A device') + ' is viewing your screen.' : 'Trusted devices connect instantly. A new device needs your OK once.')
+ $('hostSub').textContent = !can ? 'Android browsers cannot share the screen. Use the MobiPC Android app.'
+  : on ? (sharing ? who + ' is viewing your screen.' + (APP ? (nat.control && nat.a11y ? ' Control is on.' : ' View only.') : '') : 'Trusted devices connect instantly. A new device needs your OK once.')
+  : APP ? 'Start once. Android asks for screen permission one time, then trusted devices connect instantly.'
   : 'Start once. With the MobiPC Agent running, no screen picker or popup is needed again, and hosting restarts by itself.';
 }
 function agentScreen() {
@@ -1241,6 +1255,13 @@ function agentScreen() {
  });
 }
 async function startHosting(silent) {
+ if (APP) {
+  const id = localStorage.getItem(localDeviceKey('android'));
+  if (!id) { $('hostSub').textContent = 'Register this phone first: tap Set up this device.'; return; }
+  localStorage.setItem('mobipc_host_ctl', $('hostCtl').checked ? '1' : '0');
+  APP.startHost(String(id), $('hostCtl').checked);
+  return;
+ }
  if (hosting.stream || hosting.starting) return;
  if (!session?.user) { if (!silent) $('hostSub').textContent = 'Please sign in first.'; return; }
  hosting.starting = true;
@@ -1274,9 +1295,29 @@ function stopHosting(notify) {
  setControl(false); syncBar(); renderHost();
 }
 function manualStopHosting() {
+ if (APP) { APP.stopHost(); return; }
  localStorage.setItem('mobipc_autohost', '0');
  stopHosting(true);
  try { if (ctl.ws) ctl.ws.close(); } catch (e) {}
+}
+window.mobiNative = {
+ state(j) {
+  Object.assign(nat, typeof j === 'string' ? JSON.parse(j) : j);
+  for (const k in live) if (live[k].role === 'host') delete live[k];
+  if (nat.peerId) live[nat.peerId] = {role:'host'};
+  hosting.peerName = nat.peerName || '';
+  renderHost(); renderPaired();
+  if (nat.note) $('hostSub').textContent = nat.note;
+ },
+ async resume() {
+  try { const ns = JSON.parse(APP.getSession() || 'null'); if (ns && ns.a && sb) await sb.auth.setSession({access_token:ns.a, refresh_token:ns.r}); } catch (e) {}
+ }
+};
+if (APP) {
+ $('remoteFullscreen').classList.add('hidden');
+ $('hostA11yBtn').onclick = () => APP.openAccessibility();
+ $('hostCtl').onchange = () => { try { APP.setControl($('hostCtl').checked); } catch (e) {} };
+ try { window.mobiNative.state(APP.state()); } catch (e) {}
 }
 $('hostStart').onclick = () => startHosting(false);
 $('hostStop').onclick = manualStopHosting;
@@ -1423,10 +1464,11 @@ async function respondRequest(id, decision, info) {
    showMessage('registerMsg','Could not update request: ' + result.error.message);
    return;
   }
+  if (APP && nat.hosting && decision === 'approve') { try { APP.serve(id, String(info.requester_device_id || ''), info.requester_device_name || ''); } catch (e) {} }
   if (started && info.requester_device_id) live[String(info.requester_device_id)] = {role:'host'};
   syncBar(); renderHost(); renderPaired();
   showMessage('registerMsg', decision === 'approve'
-   ? (started ? 'Connected. Your screen is being shared.' : 'Accepted. This browser cannot share a screen, so only pairing is active.')
+   ? ((started || (APP && nat.hosting)) ? 'Connected. Your screen is being shared.' : APP ? 'Accepted. Tap Start hosting to share the screen of this phone.' : 'Accepted. This browser cannot share a screen, so only pairing is active.')
    : 'Connection request rejected.');
   await refreshOutgoingStatus();
   loadSavedDevices();
