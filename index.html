@@ -195,6 +195,7 @@ body:has(#authGrid.hidden) .welcome{display:none}
    </div>
    <div class="host" id="hostPanel">
     <div class="host-top"><span class="host-dot" id="hostDot"></span><div><b id="hostTitle">Not hosting</b><div class="saved-meta" id="hostSub"></div></div></div>
+    <div class="saved-meta" id="agentRow" style="margin-top:12px"><span id="agentText"></span><button class="secondary full" id="agentCheck">Check agent again</button></div>
     <label class="check"><input type="checkbox" id="hostCtl"><span id="hostCtlText">Allow remote control (needs the MobiPC Agent)</span></label>
     <div class="saved-meta hidden" id="hostA11y" style="margin-top:12px">Remote control needs the MobiPC Accessibility service.<button class="secondary full" id="hostA11yBtn">Turn on in Settings</button></div>
     <button class="full" id="hostStart">Start hosting this screen</button>
@@ -345,6 +346,7 @@ let savedDevicesCache = [];
 let currentOutgoingRequestId = null;
 let lastTargetId = null, lastPaired = [], reqInfo = {};
 const live = {}, announced = new Set();
+const agent = {ok:null, why:''};
 const APP = window.MobiBridge || null;
 const nat = {hosting:false, control:false, a11y:false, peerId:'', peerName:'', note:''};
 function pushSession(s) { if (APP && s) { try { APP.saveSession(SUPABASE_URL, SUPABASE_KEY, s.access_token, s.refresh_token); } catch (e) {} } }
@@ -1166,7 +1168,8 @@ function agentConnect(token) {
   let ws; try { ws = new WebSocket('ws://127.0.0.1:8765'); } catch (e) { return reject(e); }
   ws.binaryType = 'arraybuffer';
   const t = setTimeout(() => { try { ws.close(); } catch (e) {} reject(new Error('timeout')); }, 5000);
-  ws.onopen = () => ws.send(JSON.stringify({token}));
+  let opened = false;
+  ws.onopen = () => { opened = true; ws.send(JSON.stringify({token})); };
   ws.onmessage = e => {
    if (typeof e.data === 'string') { if (e.data === 'ok') { clearTimeout(t); ctl.ws = ws; resolve(); } }
    else if (ctl.onframe) ctl.onframe(e.data);
@@ -1174,7 +1177,7 @@ function agentConnect(token) {
   ws.onclose = () => {
    clearTimeout(t);
    if (ctl.ws === ws) { ctl.ws = null; if (hosting.agentSource) stopHosting(true); else if (ctl.allowed) setControl(false); }
-   reject(new Error('closed'));
+   reject(new Error(opened ? 'badtoken' : 'unreachable'));
   };
  });
 }
@@ -1191,15 +1194,25 @@ $('shareCtl').onclick = async () => {
  const st = stm.getVideoTracks()[0]?.getSettings?.() || {};
  if (st.displaySurface && st.displaySurface !== 'monitor') { showShareBar('Control needs "Entire screen". Stop sharing and share again, choosing Entire screen.'); return; }
  if (await tryAgent(true)) { hosting.wantCtl = true; setControl(true); syncBar(); return; }
- showShareBar('Could not reach the MobiPC Agent. Start it on this PC and check the token.');
+ showShareBar('Could not reach the MobiPC Agent. Start it on this PC, check the token, and allow local network access if Chrome asks.');
 };
 async function tryAgent(prompting) {
  if (ctl.ws && ctl.ws.readyState === 1) return true;
  let token = localStorage.getItem('mobipc_agent_token');
  if (!token && prompting) token = (prompt('Enter the token shown in the MobiPC Agent window on this PC.\nLeave it empty to use the browser screen picker instead:') || '').trim();
  if (!token) return false;
- try { await agentConnect(token); localStorage.setItem('mobipc_agent_token', token); return true; }
- catch (e) { return false; }
+ try {
+  await agentConnect(token);
+  localStorage.setItem('mobipc_agent_token', token);
+  agent.ok = true; agent.why = ''; renderHost();
+  return true;
+ } catch (e) {
+  agent.ok = false;
+  agent.why = e && e.message === 'badtoken' ? 'The token is wrong. Press Check again and enter the token shown in the agent window.' : 'MobiPC Agent not found.';
+  if (e && e.message === 'badtoken') localStorage.removeItem('mobipc_agent_token');
+  renderHost();
+  return false;
+ }
 }
 function syncBar() {
  const sharing = !!(rtc && rtc.role === 'sharer');
@@ -1219,6 +1232,10 @@ function renderHost() {
  $('hostStart').classList.toggle('hidden', on || !can);
  $('hostStop').classList.toggle('hidden', !on);
  $('hostCtl').closest('label').classList.toggle('hidden', on || !can);
+ $('agentRow').classList.toggle('hidden', !!APP || !can);
+ $('agentText').textContent = (ctl.ws && ctl.ws.readyState === 1) ? '● MobiPC Agent: connected (control and no-popup screen work)'
+  : agent.ok === false ? '● ' + (agent.why || 'MobiPC Agent not found.') + ' Start Start_MobiPC_Agent_Windows.bat, keep its window open, and allow "local network" access if Chrome asks.'
+  : '● MobiPC Agent: not checked yet';
  $('hostCtlText').textContent = APP ? 'Allow remote control (needs Accessibility permission)' : 'Allow remote control (needs the MobiPC Agent)';
  $('hostA11y').classList.toggle('hidden', !(APP && !nat.a11y && (on || $('hostCtl').checked)));
  $('hostDot').className = 'host-dot' + (on ? (sharing ? ' live' : ' ready') : '');
@@ -1319,14 +1336,18 @@ if (APP) {
  $('hostCtl').onchange = () => { try { APP.setControl($('hostCtl').checked); } catch (e) {} };
  try { window.mobiNative.state(APP.state()); } catch (e) {}
 }
+$('agentCheck').onclick = async () => { await tryAgent(true); renderHost(); };
 $('hostStart').onclick = () => startHosting(false);
 $('hostStop').onclick = manualStopHosting;
 // after the first manual start, hosting restarts by itself whenever the agent is running
-setInterval(() => {
- if (hosting.stream || hosting.starting || approving || !session?.user) return;
+let autoFails = 0, autoNext = 0;
+setInterval(async () => {
+ if (APP || hosting.stream || hosting.starting || approving || !session?.user || Date.now() < autoNext) return;
  if (/Android/i.test(navigator.userAgent) || localStorage.getItem('mobipc_autohost') !== '1') return;
  if (!localStorage.getItem('mobipc_agent_token') || !localStorage.getItem(localDeviceKey('pc'))) return;
- startHosting(true);
+ await startHosting(true);
+ if (hosting.stream) autoFails = 0;
+ else { autoFails++; autoNext = Date.now() + Math.min(120000, 6000 * Math.pow(2, autoFails)); }
 }, 6000);
 $('hostCtl').checked = localStorage.getItem('mobipc_host_ctl') !== '0';
 renderHost();
